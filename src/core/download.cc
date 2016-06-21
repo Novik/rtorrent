@@ -59,11 +59,14 @@ Download::Download(download_type d) :
   m_download(d),
   m_hashFailed(false),
 
+  m_chunksFailed(0),
   m_resumeFlags(~uint32_t()),
   m_group(0) {
 
-  m_download.info()->signal_tracker_success().push_back(std::bind(&Download::receive_tracker_msg, this, ""));
-  m_download.info()->signal_tracker_failed().push_back(std::bind(&Download::receive_tracker_msg, this, std::placeholders::_1));
+  m_download.info()->signal_tracker_success().push_back(tr1::bind(&Download::receive_tracker_msg, this, ""));
+  m_download.info()->signal_tracker_failed().push_back(tr1::bind(&Download::receive_tracker_msg, this, tr1::placeholders::_1));
+  m_download.info()->signal_storage_error().push_back(tr1::bind(&Download::receive_storage_error, this, tr1::placeholders::_1));
+  m_download.info()->signal_chunk_failed().push_back(tr1::bind(&Download::receive_chunk_failed, this, tr1::placeholders::_1));
 }
 
 Download::~Download() {
@@ -115,6 +118,11 @@ Download::receive_tracker_msg(std::string msg) {
     m_message = "Tracker: [" + msg + "]";
 }
 
+void
+Download::receive_storage_error(std::string msg) {
+  m_message = "Storage error: [" + msg + "]";
+}
+
 float
 Download::distributed_copies() const {
   const uint8_t* avail = m_download.chunks_seen();
@@ -137,6 +145,11 @@ Download::distributed_copies() const {
   }
 
   return minAvail + 1 - bitfield->is_all_set() - (float)num / m_download.file_list()->size_chunks();
+}
+
+void
+Download::receive_chunk_failed(__UNUSED uint32_t idx) {
+  m_chunksFailed++;
 }
 
 void

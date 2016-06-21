@@ -11,4 +11,4 @@ libsub_utils_a_SOURCES = \
 	socket_fd.cc \
 	socket_fd.h
 
-AM_CPPFLAGS = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)

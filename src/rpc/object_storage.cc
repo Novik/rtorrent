@@ -44,23 +44,6 @@
 
 namespace rpc {
 
-const unsigned int object_storage::flag_generic_type;
-const unsigned int object_storage::flag_bool_type;
-const unsigned int object_storage::flag_value_type;
-const unsigned int object_storage::flag_string_type;
-const unsigned int object_storage::flag_list_type;
-const unsigned int object_storage::flag_function_type;
-const unsigned int object_storage::flag_multi_type;
-
-const unsigned int object_storage::mask_type;
-
-const unsigned int object_storage::flag_constant;
-const unsigned int object_storage::flag_static;
-const unsigned int object_storage::flag_private;
-const unsigned int object_storage::flag_rlookup;
-
-const size_t object_storage::key_size;
-
 object_storage::local_iterator
 object_storage::find_local(const torrent::raw_string& key) {
   std::size_t n = hash_fixed_key_type::hash(key.data(), key.size()) % bucket_count();
@@ -198,8 +181,9 @@ object_storage::call_function(const torrent::raw_string& key, target_type target
 
   switch (itr->second.flags & mask_type) {
   case flag_function_type:
-  case flag_multi_type:
     return command_function_call_object(itr->second.object, target, object);
+  case flag_multi_type:
+    return command_function_multi_call(itr->second.object.as_map(), target, object);
   default:
     throw torrent::input_error("Key not found or wrong type.");
   }
@@ -235,7 +219,7 @@ object_storage::erase_multi_key(const torrent::raw_string& key, const std::strin
 
 void
 object_storage::set_multi_key_obj(const torrent::raw_string& key, const std::string& cmd_key, const torrent::Object& object) {
-  if (!object.is_string() && !object.is_dict_key() && !object.is_list())
+  if (!object.is_string() && !object.is_dict_key())
     throw torrent::input_error("Object is wrong type.");
 
   local_iterator itr = find_local_mutable(key, flag_multi_type);
@@ -262,7 +246,7 @@ object_storage::rlookup_list(const std::string& cmd_key) {
   
   if (r_itr != m_rlookup.end())
     std::transform(r_itr->second.begin(), r_itr->second.end(), std::back_inserter(result),
-                   std::bind(&key_type::c_str, std::bind(rak::mem_ptr(&value_type::first), std::placeholders::_1)));
+                   std::tr1::bind(&key_type::c_str, std::tr1::bind(rak::mem_ptr(&value_type::first), std::tr1::placeholders::_1)));
 
   return result;
 }

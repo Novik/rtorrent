@@ -53,7 +53,7 @@ class lt_cacheline_aligned SCgi : public torrent::Event {
 public:
   typedef rak::function2<bool, const char*, uint32_t>             slot_write;
 
-  static const int max_tasks = 100;
+  static const int max_tasks = 30;
 
   // Global lock:
   SCgi() : m_logFd(-1) {}
@@ -77,7 +77,7 @@ public:
   virtual void        event_write();
   virtual void        event_error();
 
-  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length, bool trusted = true);
+  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length);
 
   utils::SocketFd&    get_fd()            { return *reinterpret_cast<utils::SocketFd*>(&m_fileDesc); }
 

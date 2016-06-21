@@ -245,6 +245,9 @@ append_table(torrent::ipv4_table::base_type* extent, torrent::Object::list_type&
   torrent::ipv4_table::table_type::iterator first = extent->table.begin();
   torrent::ipv4_table::table_type::iterator last  = extent->table.end();
 
+  int current_value = 0;
+  uint32_t range_first = 0;
+
   while (first != last) {
     if (first->first != NULL) {
       // Do something more here?...
@@ -263,6 +266,9 @@ append_table(torrent::ipv4_table::base_type* extent, torrent::Object::list_type&
                torrent::option_as_string(torrent::OPTION_IP_FILTER, first->second));
 
       result.push_back((std::string)buffer);
+
+      range_first = position;
+      current_value = first->second;
     }
 
     first++;
@@ -281,14 +287,17 @@ apply_ipv4_filter_dump() {
 
 void
 initialize_command_ip() {
-  CMD2_ANY_STRING  ("ip_tables.insert_table",  std::bind(&apply_ip_tables_insert_table, std::placeholders::_2));
-  CMD2_ANY_STRING  ("ip_tables.size_data",     std::bind(&apply_ip_tables_size_data, std::placeholders::_2));
-  CMD2_ANY_LIST    ("ip_tables.get",           std::bind(&apply_ip_tables_get, std::placeholders::_2));
-  CMD2_ANY_LIST    ("ip_tables.add_address",   std::bind(&apply_ip_tables_add_address, std::placeholders::_2));
+  CMD2_ANY         ("strings.ip_filter",       tr1::bind(&torrent::option_list_strings, torrent::OPTION_IP_FILTER));
+  CMD2_ANY         ("strings.ip_tos",          tr1::bind(&torrent::option_list_strings, torrent::OPTION_IP_TOS));
 
-  CMD2_ANY         ("ipv4_filter.size_data",   std::bind(&apply_ipv4_filter_size_data));
-  CMD2_ANY_STRING  ("ipv4_filter.get",         std::bind(&apply_ipv4_filter_get, std::placeholders::_2));
-  CMD2_ANY_LIST    ("ipv4_filter.add_address", std::bind(&apply_ipv4_filter_add_address, std::placeholders::_2));
-  CMD2_ANY_LIST    ("ipv4_filter.load",        std::bind(&apply_ipv4_filter_load, std::placeholders::_2));
-  CMD2_ANY_LIST    ("ipv4_filter.dump",        std::bind(&apply_ipv4_filter_dump));
+  CMD2_ANY_STRING  ("ip_tables.insert_table",  tr1::bind(&apply_ip_tables_insert_table, tr1::placeholders::_2));
+  CMD2_ANY_STRING  ("ip_tables.size_data",     tr1::bind(&apply_ip_tables_size_data, tr1::placeholders::_2));
+  CMD2_ANY_LIST    ("ip_tables.get",           tr1::bind(&apply_ip_tables_get, tr1::placeholders::_2));
+  CMD2_ANY_LIST    ("ip_tables.add_address",   tr1::bind(&apply_ip_tables_add_address, tr1::placeholders::_2));
+
+  CMD2_ANY         ("ipv4_filter.size_data",   tr1::bind(&apply_ipv4_filter_size_data));
+  CMD2_ANY_STRING  ("ipv4_filter.get",         tr1::bind(&apply_ipv4_filter_get, tr1::placeholders::_2));
+  CMD2_ANY_LIST    ("ipv4_filter.add_address", tr1::bind(&apply_ipv4_filter_add_address, tr1::placeholders::_2));
+  CMD2_ANY_LIST    ("ipv4_filter.load",        tr1::bind(&apply_ipv4_filter_load, tr1::placeholders::_2));
+  CMD2_ANY_LIST    ("ipv4_filter.dump",        tr1::bind(&apply_ipv4_filter_dump));
 }

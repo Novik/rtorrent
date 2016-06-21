@@ -45,8 +45,8 @@ namespace input {
 
 class TextInput : private std::string {
 public:
-  typedef std::string                 Base;
-  typedef std::function<void ()> slot_void;
+  typedef std::string       Base;
+  typedef sigc::slot0<void> SlotDirty;
 
   using Base::c_str;
   using Base::empty;
@@ -64,8 +64,8 @@ public:
 
   void                clear()                    { m_pos = 0; m_alt = false; Base::clear(); }
 
-  void                slot_dirty(slot_void s)    { m_slot_dirty = s; }
-  void                mark_dirty()               { if (m_slot_dirty) m_slot_dirty(); }
+  void                slot_dirty(SlotDirty s)    { m_slotDirty = s; }
+  void                mark_dirty()               { m_slotDirty(); }
 
   std::string&        str()                      { return *this; }
 
@@ -75,7 +75,7 @@ private:
   size_type           m_pos;
 
   bool                m_alt;
-  slot_void           m_slot_dirty;
+  SlotDirty           m_slotDirty;
 
   Bindings            m_bindings;
 };

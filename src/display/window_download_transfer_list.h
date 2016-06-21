@@ -71,6 +71,8 @@ private:
   char                key_id(torrent::BlockTransfer::key_type key);
 
   core::Download*     m_download;
+
+  unsigned int*       m_focus;
   assigned_vector     m_assigned;
 };
 

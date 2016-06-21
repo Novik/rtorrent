@@ -39,14 +39,14 @@
 
 #include "globals.h"
 
-#include lt_tr1_functional
+#include <tr1/functional>
 #include <torrent/object.h>
 
 namespace rpc {
 
 class CommandSchedulerItem {
 public:
-  typedef std::function<void ()> slot_void;
+  typedef std::tr1::function<void ()> slot_void;
 
   CommandSchedulerItem(const std::string& key) : m_key(key), m_interval(0) {}
   ~CommandSchedulerItem();

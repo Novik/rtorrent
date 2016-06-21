@@ -37,23 +37,22 @@
 #ifndef RAK_PRIORITY_QUEUE_DEFAULT_H
 #define RAK_PRIORITY_QUEUE_DEFAULT_H
 
-#include lt_tr1_functional
+#include <stdexcept>
+#include <tr1/functional>
 #include <rak/allocators.h>
 #include <rak/priority_queue.h>
 #include <rak/timer.h>
-
-#include "torrent/exceptions.h"
 
 namespace rak {
 
 class priority_item {
 public:
-  typedef std::function<void (void)> slot_void;
+  typedef std::tr1::function<void (void)> slot_void;
 
   priority_item() {}
   ~priority_item() {
     if (is_queued())
-      throw torrent::internal_error("priority_item::~priority_item() called on a queued item.");
+      throw std::logic_error("priority_item::~priority_item() called on a queued item.");
 
     m_time = timer();
     m_slot = slot_void();
@@ -102,16 +101,16 @@ priority_queue_perform(priority_queue_default* queue, timer t) {
 inline void
 priority_queue_insert(priority_queue_default* queue, priority_item* item, timer t) {
   if (t == timer())
-    throw torrent::internal_error("priority_queue_insert(...) received a bad timer.");
+    throw std::logic_error("priority_queue_insert(...) received a bad timer.");
 
   if (!item->is_valid())
-    throw torrent::internal_error("priority_queue_insert(...) called on an invalid item.");
+    throw std::logic_error("priority_queue_insert(...) called on an invalid item.");
 
   if (item->is_queued())
-    throw torrent::internal_error("priority_queue_insert(...) called on an already queued item.");
+    throw std::logic_error("priority_queue_insert(...) called on an already queued item.");
 
   if (queue->find(item) != queue->end())
-    throw torrent::internal_error("priority_queue_insert(...) item found in queue.");
+    throw std::logic_error("priority_queue_insert(...) item found in queue.");
 
   item->set_time(t);
   queue->push(item);
@@ -125,16 +124,16 @@ priority_queue_erase(priority_queue_default* queue, priority_item* item) {
   // Check is_valid() after is_queued() so that it is safe to call
   // erase on untouched instances.
   if (!item->is_valid())
-    throw torrent::internal_error("priority_queue_erase(...) called on an invalid item.");
+    throw std::logic_error("priority_queue_erase(...) called on an invalid item.");
 
   // Clear time before erasing to force it to the top.
   item->clear_time();
   
   if (!queue->erase(item))
-    throw torrent::internal_error("priority_queue_erase(...) could not find item in queue.");
+    throw std::logic_error("priority_queue_erase(...) could not find item in queue.");
 
   if (queue->find(item) != queue->end())
-    throw torrent::internal_error("priority_queue_erase(...) item still in queue.");
+    throw std::logic_error("priority_queue_erase(...) item still in queue.");
 }
 
 }

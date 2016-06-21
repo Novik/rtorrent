@@ -106,19 +106,6 @@ SCgiTask::close() {
 //   control->core()->push_log(std::string(buffer));
 }
 
-char* memstr(char* haystack, char* needle, int size)
-{
-	char* p;
-	char needlesize = strlen(needle);
-
-	for(p = haystack; p <= (haystack-needlesize+size); p++)
-	{
-		if(memcmp(p, needle, needlesize) == 0)
-			return(p);
-	}
-	return(NULL);
-}
-
 void
 SCgiTask::event_read() {
   int bytes = ::recv(m_fileDesc, m_position, m_bufferSize - (m_position - m_buffer), 0);
@@ -162,8 +149,6 @@ SCgiTask::event_read() {
     if (*contentPos != '\0' || contentSize <= 0 || contentSize > max_content_size)
       goto event_read_failed;
 
-    m_trusted = (memstr(current,"UNTRUSTED_CONNECTION",headerSize)==NULL);
-
     m_body = current + headerSize + 1;
     headerSize = std::distance(m_buffer, m_body);
 
@@ -200,10 +185,10 @@ SCgiTask::event_read() {
     result = write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
   }
 
-  lt_log_print_dump(torrent::LOG_RPC_DUMP, m_body, m_bufferSize - std::distance(m_buffer, m_body), "scgi", "RPC read.", 0);
+  lt_log_print_dump(torrent::LOG_RPC_DEBUG, m_body, m_bufferSize - std::distance(m_buffer, m_body), "scgi", "RPC read.", 0);
 
   // Close if the call failed, else stay open to write back data.
-  if (!m_parent->receive_call(this, m_body, m_bufferSize - std::distance(m_buffer, m_body), m_trusted))
+  if (!m_parent->receive_call(this, m_body, m_bufferSize - std::distance(m_buffer, m_body)))
     close();
 
   return;
@@ -261,7 +246,7 @@ SCgiTask::receive_write(const char* buffer, uint32_t length) {
     result = write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
   }
 
-  lt_log_print_dump(torrent::LOG_RPC_DUMP, m_buffer, m_bufferSize, "scgi", "RPC write.", 0);
+  lt_log_print_dump(torrent::LOG_RPC_DEBUG, m_buffer, m_bufferSize, "scgi", "RPC write.", 0);
 
   event_write();
   return true;

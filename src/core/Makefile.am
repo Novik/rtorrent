@@ -30,4 +30,4 @@ libsub_core_a_SOURCES = \
 	view_manager.cc \
 	view_manager.h
 
-AM_CPPFLAGS = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)

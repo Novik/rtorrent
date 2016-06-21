@@ -39,19 +39,19 @@
 
 #include <map>
 #include <string>
-#include lt_tr1_functional
+#include <sigc++/functors/slot.h>
 
 #include "download.h"
 
 namespace core {
 
-class DownloadSlotMap : public std::map<std::string, std::function<void (Download*)> > {
+class DownloadSlotMap : public std::map<std::string, sigc::slot1<void, Download*> > {
 public:
-  typedef std::function<void (Download*)> slot_download;
-  typedef std::map<std::string, slot_download> Base;
+  typedef sigc::slot1<void, Download*>        SlotDownload;
+  typedef std::map<std::string, SlotDownload> Base;
   
-  void                insert(const std::string& key, slot_download s) { Base::operator[](key) = s; }
-  void                erase(const std::string& key)                   { Base::erase(key); }
+  void                insert(const std::string& key, SlotDownload s) { Base::operator[](key) = s; }
+  void                erase(const std::string& key)                  { Base::erase(key); }
 
   void                for_each(Download* d);
 };

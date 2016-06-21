@@ -55,8 +55,6 @@ ElementStringList::activate(display::Frame* frame, bool focus) {
   if (is_active())
     throw torrent::internal_error("ui::ElementStringList::activate(...) is_active().");
 
-  lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: activate");
-
   control->input()->push_back(&m_bindings);
 
   m_window = new WStringList();
@@ -71,8 +69,6 @@ ElementStringList::disable() {
   if (!is_active())
     throw torrent::internal_error("ui::ElementStringList::disable(...) !is_active().");
 
-  lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: deactivate");
-
   control->input()->erase(&m_bindings);
 
   m_frame->clear();
@@ -84,9 +80,6 @@ ElementStringList::disable() {
 
 void
 ElementStringList::next_screen() {
-  if (m_window == NULL)
-    return;
-
   if (m_window->get_draw_end() != m_list.end())
     m_window->set_range(m_window->get_draw_end(), m_list.end());
   else

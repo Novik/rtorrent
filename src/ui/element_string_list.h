@@ -41,7 +41,6 @@
 #include <string>
 #include <algorithm>
 #include <functional>
-#include <torrent/utils/log.h>
 
 #include "element_base.h"
 
@@ -70,14 +69,8 @@ public:
     while (first != last)
       m_list.push_back(*(first++));
 
-    if (m_window != NULL) {
-      lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: set range (visible)");
-
-      m_window->set_range(m_list.begin(), m_list.end());
-      m_window->mark_dirty();
-    } else {
-      lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: set range (hidden)");
-    }
+    m_window->set_range(m_list.begin(), m_list.end());
+    m_window->mark_dirty();
   }
 
   // A hack, clean this up.
@@ -88,14 +81,8 @@ public:
     while (first != last)
       m_list.push_back((first++)->d_name);
 
-    if (m_window != NULL) {
-      lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: set dirent range (visible)");
-
-      m_window->set_range(m_list.begin(), m_list.end());
-      m_window->mark_dirty();
-    } else {
-      lt_log_print(torrent::LOG_UI_EVENTS, "element_string_list: set dirent range (hidden)");
-    }
+    m_window->set_range(m_list.begin(), m_list.end());
+    m_window->mark_dirty();
   }
 
   void                next_screen();

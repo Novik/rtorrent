@@ -37,7 +37,7 @@
 #ifndef RTORRENT_RPC_XMLRPC_H
 #define RTORRENT_RPC_XMLRPC_H
 
-#include lt_tr1_functional
+#include <tr1/functional>
 #include <torrent/hash_string.h>
 
 namespace core {
@@ -54,11 +54,11 @@ namespace rpc {
 
 class XmlRpc {
 public:
-  typedef std::function<core::Download* (const char*)>                 slot_download;
-  typedef std::function<torrent::File* (core::Download*, uint32_t)>    slot_file;
-  typedef std::function<torrent::Tracker* (core::Download*, uint32_t)> slot_tracker;
-  typedef std::function<torrent::Peer* (core::Download*, const torrent::HashString&)> slot_peer;
-  typedef std::function<bool (const char*, uint32_t)>                  slot_write;
+  typedef std::tr1::function<core::Download* (const char*)>                 slot_download;
+  typedef std::tr1::function<torrent::File* (core::Download*, uint32_t)>    slot_file;
+  typedef std::tr1::function<torrent::Tracker* (core::Download*, uint32_t)> slot_tracker;
+  typedef std::tr1::function<torrent::Peer* (core::Download*, const torrent::HashString&)> slot_peer;
+  typedef std::tr1::function<bool (const char*, uint32_t)>                  slot_write;
 
   static const int dialect_generic = 0;
   static const int dialect_i8      = 1;
@@ -80,7 +80,7 @@ public:
   void                initialize();
   void                cleanup();
 
-  bool                process(const char* inBuffer, uint32_t length, slot_write slotWrite, bool trusted = true);
+  bool                process(const char* inBuffer, uint32_t length, slot_write slotWrite);
 
   void                insert_command(const char* name, const char* parm, const char* doc);
 

@@ -123,7 +123,7 @@ TextInput::pressed(int key) {
     }
   }
 
-  mark_dirty();
+  m_slotDirty();
 
   return true;
 }  

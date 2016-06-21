@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <curl/multi.h>
+#include <sigc++/adaptors/bind.h>
 #include <torrent/exceptions.h>
 
 #include "rak/functional.h"
@@ -51,11 +52,10 @@ CurlStack::CurlStack() :
   m_handle((void*)curl_multi_init()),
   m_active(0),
   m_maxActive(32),
-  m_ssl_verify_host(true),
   m_ssl_verify_peer(true),
   m_dns_timeout(60) {
 
-  m_taskTimeout.slot() = std::bind(&CurlStack::receive_timeout, this);
+  m_taskTimeout.slot() = std::tr1::bind(&CurlStack::receive_timeout, this);
 
 #if (LIBCURL_VERSION_NUM >= 0x071000)
   curl_multi_setopt((CURLM*)m_handle, CURLMOPT_TIMERDATA, this);
@@ -92,50 +92,35 @@ CurlStack::receive_action(CurlSocket* socket, int events) {
   do {
     int count;
 #if (LIBCURL_VERSION_NUM >= 0x071003)
-    code = curl_multi_socket_action((CURLM*)m_handle,
-                                    socket != NULL ? socket->file_descriptor() : CURL_SOCKET_TIMEOUT,
-                                    events,
-                                    &count);
+    code = curl_multi_socket_action((CURLM*)m_handle, socket != NULL ? socket->file_descriptor() : CURL_SOCKET_TIMEOUT, events, &count);
 #else
-    code = curl_multi_socket((CURLM*)m_handle,
-                             socket != NULL ? socket->file_descriptor() : CURL_SOCKET_TIMEOUT,
-                             &count);
+    code = curl_multi_socket((CURLM*)m_handle, socket != NULL ? socket->file_descriptor() : CURL_SOCKET_TIMEOUT, &count);
 #endif
 
     if (code > 0)
       throw torrent::internal_error("Error calling curl_multi_socket_action.");
 
-    // Socket might be removed when cleaning handles below, future
-    // calls should not use it.
+    // Socket might be removed when cleaning handles below, future calls should not use it.
     socket = NULL;
     events = 0;
 
     if ((unsigned int)count != size()) {
-      while (process_done_handle())
-        ; // Do nothing.
+      // Done with some handles.
+      int t;
+      CURLMsg* msg;
+
+      while ((msg = curl_multi_info_read((CURLM*)m_handle, &t)) != NULL) {
+        if (msg->msg != CURLMSG_DONE)
+          throw torrent::internal_error("CurlStack::receive_action() msg->msg != CURLMSG_DONE.");
+
+	transfer_done(msg->easy_handle, msg->data.result == CURLE_OK ? NULL : curl_easy_strerror(msg->data.result));
+      }
 
       if (empty())
         priority_queue_erase(&taskScheduler, &m_taskTimeout);
     }
 
   } while (code == CURLM_CALL_MULTI_PERFORM);
-}
-
-bool
-CurlStack::process_done_handle() {
-  int remaining_msgs = 0;
-  CURLMsg* msg = curl_multi_info_read((CURLM*)m_handle, &remaining_msgs);
-
-  if (msg == NULL)
-    return false;
-
-  if (msg->msg != CURLMSG_DONE)
-    throw torrent::internal_error("CurlStack::receive_action() msg->msg != CURLMSG_DONE.");
-
-  transfer_done(msg->easy_handle,
-                msg->data.result == CURLE_OK ? NULL : curl_easy_strerror(msg->data.result));
-
-  return remaining_msgs != 0;
 }
 
 void
@@ -181,8 +166,7 @@ CurlStack::add_get(CurlGet* get) {
   if (!m_httpCaCert.empty())
     curl_easy_setopt(get->handle(), CURLOPT_CAINFO, m_httpCaCert.c_str());
 
-  curl_easy_setopt(get->handle(), CURLOPT_SSL_VERIFYHOST, (long)(m_ssl_verify_host ? 2 : 0));
-  curl_easy_setopt(get->handle(), CURLOPT_SSL_VERIFYPEER, (long)(m_ssl_verify_peer ? 1 : 0));
+  curl_easy_setopt(get->handle(), CURLOPT_SSL_VERIFYPEER, (long)m_ssl_verify_peer); 
   curl_easy_setopt(get->handle(), CURLOPT_DNS_CACHE_TIMEOUT, m_dns_timeout);
 
   base_type::push_back(get);
