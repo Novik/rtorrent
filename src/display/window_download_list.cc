@@ -48,27 +48,18 @@
 
 namespace display {
 
-WindowDownloadList::WindowDownloadList() :
-  Window(new Canvas, 0, 120, 1, extent_full, extent_full),
-  m_view(NULL) {
-}
-
 WindowDownloadList::~WindowDownloadList() {
-  if (m_view != NULL)
-    m_view->signal_changed().erase(m_changed_itr);
-  
-  m_view = NULL;
+  m_connChanged.disconnect();
 }
 
 void
 WindowDownloadList::set_view(core::View* l) {
-  if (m_view != NULL)
-    m_view->signal_changed().erase(m_changed_itr);
-
   m_view = l;
 
+  m_connChanged.disconnect();
+
   if (m_view != NULL)
-    m_changed_itr = m_view->signal_changed().insert(m_view->signal_changed().begin(), std::bind(&Window::mark_dirty, this));
+    m_connChanged = m_view->signal_changed().connect(sigc::mem_fun(*this, &Window::mark_dirty));
 }
 
 void

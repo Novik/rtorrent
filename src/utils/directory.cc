@@ -38,11 +38,13 @@
 
 #include <algorithm>
 #include <functional>
-
 #include <dirent.h>
-#include <sys/stat.h>
 #include <rak/path.h>
 #include <torrent/exceptions.h>
+
+#ifdef __sun__
+#include <sys/stat.h>
+#endif
 
 #include "directory.h"
 

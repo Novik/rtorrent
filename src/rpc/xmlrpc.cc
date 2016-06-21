@@ -526,80 +526,11 @@ XmlRpc::cleanup() {
   delete (xmlrpc_env*)m_env;
 }
 
-static std::vector<std::string> untrusted_commands = 
-{
-	"execute",
-	"execute.capture",
-	"execute.capture_nothrow",
-	"execute.nothrow",
-	"execute.nothrow.bg",
-	"execute.raw",
-	"execute.raw.bg",
-	"execute.raw_nothrow",
-	"execute.raw_nothrow.bg",
-	"execute.throw",
-	"execute.throw.bg",
-	"execute2",
-	"method.insert",
-	"method.redirect",
-	"method.set",
-	"method.set_key",
-	"schedule",
-	"schedule2",
-	"import",
-	"d.create_link",
-	"d.directory.set",
-	"session.path.set",
-	"d.directory_base.set",
-	"directory.default.set",
-// old commands	
-	"create_link",
-	"d.set_directory",
-	"d.set_directory_base",
-	"set_directory",
-	"set_session",
-	"execute_capture",
-	"execute_capture_nothrow",
-	"execute_nothrow",
-	"execute_nothrow_bg",
-	"execute_raw",
-	"execute_raw_bg",
-	"execute_raw_nothrow",
-	"execute_raw_nothrow_bg",
-	"execute_throw",
-	"execute_throw_bg",	
-	"system.method.insert",
-	"system.method.redirect",
-	"system.method.set",
-	"system.method.set_key",	
-	"on_insert",
-	"on_erase",
-	"on_open",
-	"on_close",
-	"on_start",
-	"on_stop",
-	"on_hash_queued",
-	"on_hash_removed",
-	"on_hash_done",
-	"on_finished"
-};
-
-void xmlrpc_check_command(xmlrpc_env* const envP,
-	const char* const methodName,
-	xmlrpc_value* const paramArrayP,
-	void* const userData)
-{
-	if(std::find(untrusted_commands.begin(), untrusted_commands.end(), methodName) != untrusted_commands.end())
-		xmlrpc_faultf(envP, "Command '%s' is not enabled for untrusted connections", methodName);
-}
-
 bool
-XmlRpc::process(const char* inBuffer, uint32_t length, slot_write slotWrite, bool trusted) {
+XmlRpc::process(const char* inBuffer, uint32_t length, slot_write slotWrite) {
   xmlrpc_env localEnv;
   xmlrpc_env_init(&localEnv);
 
-  xmlrpc_registry_set_preinvoke_method(&localEnv, (xmlrpc_registry*)m_registry, 
-  	(xmlrpc_preinvoke_method) (trusted ? NULL : &xmlrpc_check_command), NULL);
   xmlrpc_mem_block* memblock = xmlrpc_registry_process_call(&localEnv, (xmlrpc_registry*)m_registry, NULL, inBuffer, length);
 
   if (localEnv.fault_occurred && localEnv.fault_code == XMLRPC_INTERNAL_ERROR)

@@ -47,6 +47,8 @@
 #include <rak/regex.h>
 #include <rak/path.h>
 #include <rak/string_manip.h>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
 #include <torrent/utils/resume.h>
 #include <torrent/object.h>
 #include <torrent/connection_manager.h>
@@ -73,11 +75,6 @@
 #include "view.h"
 
 namespace core {
-
-const int Manager::create_start;
-const int Manager::create_tied;
-const int Manager::create_quiet;
-const int Manager::create_raw_data;
 
 void
 Manager::push_log(const char* msg) {
@@ -118,7 +115,7 @@ Manager::set_hashing_view(View* v) {
     throw torrent::internal_error("Manager::set_hashing_view(...) received NULL or is already set.");
 
   m_hashingView = v;
-  m_hashingView->signal_changed().push_back(std::bind(&Manager::receive_hashing_changed, this));
+  v->signal_changed().connect(sigc::mem_fun(this, &Manager::receive_hashing_changed));
 }
 
 torrent::ThrottlePair
@@ -138,7 +135,7 @@ Manager::get_throttle(const std::string& name) {
 void
 Manager::set_address_throttle(uint32_t begin, uint32_t end, torrent::ThrottlePair throttles) {
   m_addressThrottles.set_merge(begin, end, throttles);
-  torrent::connection_manager()->address_throttle() = std::bind(&core::Manager::get_address_throttle, control->core(), std::placeholders::_1);
+  torrent::connection_manager()->address_throttle() = tr1::bind(&core::Manager::get_address_throttle, control->core(), tr1::placeholders::_1);
 }
 
 torrent::ThrottlePair
@@ -149,8 +146,8 @@ Manager::get_address_throttle(const sockaddr* addr) {
 // Most of this should be possible to move out.
 void
 Manager::initialize_second() {
-  torrent::Http::slot_factory() = std::bind(&CurlStack::new_object, m_httpStack);
-  m_httpQueue->set_slot_factory(std::bind(&CurlStack::new_object, m_httpStack));
+  torrent::Http::slot_factory() = std::tr1::bind(&CurlStack::new_object, m_httpStack);
+  m_httpQueue->slot_factory(sigc::mem_fun(m_httpStack, &CurlStack::new_object));
 
   CurlStack::global_init();
 }
@@ -335,7 +332,7 @@ Manager::try_create_download(const std::string& uri, int flags, const command_li
 
   f->set_start(flags & create_start);
   f->set_print_log(!(flags & create_quiet));
-  f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+  f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
 
   if (flags & create_raw_data)
     f->load_raw_data(uri);
@@ -359,7 +356,7 @@ Manager::try_create_download_from_meta_download(torrent::Object* bencode, const 
 
   f->set_start(meta.get_key_value("start"));
   f->set_print_log(meta.get_key_value("print_log"));
-  f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+  f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
 
   // Bit of a waste to create the bencode repesentation here
   // only to have the DownloadFactory decode it.

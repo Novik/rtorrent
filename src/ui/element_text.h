@@ -37,6 +37,8 @@
 #ifndef RTORRENT_UI_ELEMENT_TEXT_H
 #define RTORRENT_UI_ELEMENT_TEXT_H
 
+#include <sigc++/functors/slot.h>
+
 #include "core/download.h"
 #include "display/text_element_string.h"
 #include "display/window_text.h"

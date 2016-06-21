@@ -165,16 +165,16 @@ SCgi::event_error() {
 }
 
 bool
-SCgi::receive_call(SCgiTask* task, const char* buffer, uint32_t length, bool trusted) {
+SCgi::receive_call(SCgiTask* task, const char* buffer, uint32_t length) {
   slot_write slotWrite;
   slotWrite.set(rak::mem_fn(task, &SCgiTask::receive_write));
 
-  torrent::thread_base::acquire_global_lock();
-  torrent::main_thread()->interrupt();
+  ThreadBase::acquire_global_lock();
+  ThreadBase::interrupt_main_polling();
 
-  bool result = xmlrpc.process(buffer, length, slotWrite, trusted);
+  bool result = xmlrpc.process(buffer, length, slotWrite);
 
-  torrent::thread_base::release_global_lock();
+  ThreadBase::release_global_lock();
 
   return result;
 }

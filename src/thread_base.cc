@@ -109,7 +109,7 @@ public:
 void throw_shutdown_exception() { throw torrent::shutdown_exception(); }
 
 ThreadBase::ThreadBase() {
-  m_taskShutdown.slot() = std::bind(&throw_shutdown_exception);
+  m_taskShutdown.slot() = std::tr1::bind(&throw_shutdown_exception);
 
   m_threadQueue = new thread_queue_hack;
 }
@@ -160,5 +160,20 @@ ThreadBase::queue_item(thread_base_func newFunc) {
 
   // Make it also restart inactive threads?
   if (m_state == STATE_ACTIVE)
-    interrupt();
+    pthread_kill(m_thread, SIGUSR1);
+}
+
+void
+ThreadBase::interrupt_main_polling() {
+  int sleep_length = 0;
+
+  while (ThreadBase::is_main_polling()) {
+    pthread_kill(torrent::main_thread()->pthread(), SIGUSR1);
+
+    if (!ThreadBase::is_main_polling())
+      return;
+
+    usleep(sleep_length);
+    sleep_length = std::min(sleep_length + 50, 1000);
+  }
 }

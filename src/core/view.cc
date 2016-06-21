@@ -40,6 +40,7 @@
 #include <functional>
 #include <rak/functional.h>
 #include <rak/functional_fun.h>
+#include <sigc++/adaptors/bind.h>
 #include <torrent/download.h>
 #include <torrent/exceptions.h>
 
@@ -138,16 +139,10 @@ struct view_downloads_filter : std::unary_function<Download*, bool> {
   const torrent::Object&       m_command;
 };
 
-void
+inline void
 View::emit_changed() {
   priority_queue_erase(&taskScheduler, &m_delayChanged);
   priority_queue_insert(&taskScheduler, &m_delayChanged, cachedTime);
-}
-
-void
-View::emit_changed_now() {
-  for (signal_void::iterator itr = m_signal_changed.begin(), last = m_signal_changed.end(); itr != last; itr++)
-    (*itr)();
 }
 
 View::~View() {
@@ -177,7 +172,7 @@ View::initialize(const std::string& name) {
   m_focus = 0;
 
   set_last_changed(rak::timer());
-  m_delayChanged.slot() = std::bind(&View::emit_changed_now, this);
+  m_delayChanged.slot() = std::tr1::bind(&signal_type::operator(), &m_signalChanged);
 }
 
 void
@@ -282,11 +277,11 @@ View::filter() {
   // perhaps always clear them, thus not throwing anything.
   if (!m_event_removed.is_empty())
     std::for_each(changed.begin(), splitChanged,
-                  std::bind(&rpc::call_object_d_nothrow, m_event_removed, std::placeholders::_1));
+                  tr1::bind(&rpc::call_object_d_nothrow, m_event_removed, tr1::placeholders::_1));
 
   if (!m_event_added.is_empty())
     std::for_each(changed.begin(), splitChanged,
-                  std::bind(&rpc::call_object_d_nothrow, m_event_added, std::placeholders::_1));
+                  tr1::bind(&rpc::call_object_d_nothrow, m_event_added, tr1::placeholders::_1));
 
   emit_changed();
 }

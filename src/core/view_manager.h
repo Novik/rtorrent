@@ -97,6 +97,9 @@ public:
 
   void                set_event_added(const std::string& name, const torrent::Object& cmd)   { (*find_throw(name))->set_event_added(cmd); }
   void                set_event_removed(const std::string& name, const torrent::Object& cmd) { (*find_throw(name))->set_event_removed(cmd); }
+
+private:
+  DownloadList*       m_list;
 };
 
 }

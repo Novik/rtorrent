@@ -39,6 +39,7 @@
 
 #include <list>
 #include <torrent/peer/peer.h>
+#include <sigc++/connection.h>
 
 #include "display/manager.h"
 #include "utils/list_focus.h"

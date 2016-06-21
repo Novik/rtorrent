@@ -37,7 +37,7 @@
 #ifndef RTORRENT_DISPLAY_WINDOW_HTTP_QUEUE_H
 #define RTORRENT_DISPLAY_WINDOW_HTTP_QUEUE_H
 
-#include lt_tr1_functional
+#include <sigc++/connection.h>
 
 #include "window.h"
 
@@ -50,10 +50,8 @@ namespace display {
 
 class WindowHttpQueue : public Window {
 public:
-  typedef std::function<void (core::CurlGet*)> slot_curl_get;
-  typedef std::list<slot_curl_get>                  signal_curl_get;
-
   WindowHttpQueue(core::HttpQueue* q);
+  ~WindowHttpQueue() { m_connInsert.disconnect(); m_connErase.disconnect(); }
 
   virtual void        redraw();
 
@@ -78,10 +76,10 @@ private:
   static std::string  create_name(core::CurlGet* h);
 
   core::HttpQueue*    m_queue;
-  Container           m_container;
+  sigc::connection    m_connInsert;
+  sigc::connection    m_connErase;
 
-  signal_curl_get::iterator m_connInsert;
-  signal_curl_get::iterator m_connErase;
+  Container           m_container;
 };
 
 }

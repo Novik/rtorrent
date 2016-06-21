@@ -12,4 +12,4 @@ libsub_input_a_SOURCES = \
 	text_input.cc \
 	text_input.h
 
-AM_CPPFLAGS = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)

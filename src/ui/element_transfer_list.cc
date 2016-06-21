@@ -52,12 +52,12 @@ ElementTransferList::ElementTransferList(core::Download* d) :
   m_window(NULL),
   m_focus(0) {
 
-  m_bindings[KEY_LEFT] = m_bindings['B' - '@'] = std::bind(&slot_type::operator(), &m_slot_exit);
+  m_bindings[KEY_LEFT] = m_bindings['B' - '@'] = sigc::mem_fun(&m_slotExit, &slot_type::operator());
 
-  m_bindings[KEY_DOWN]  = std::bind(&ElementTransferList::receive_next, this);
-  m_bindings[KEY_UP]    = std::bind(&ElementTransferList::receive_prev, this);
-  m_bindings[KEY_NPAGE] = std::bind(&ElementTransferList::receive_pagenext, this);
-  m_bindings[KEY_PPAGE] = std::bind(&ElementTransferList::receive_pageprev, this);
+  m_bindings[KEY_DOWN]  = sigc::mem_fun(*this, &ElementTransferList::receive_next);
+  m_bindings[KEY_UP]    = sigc::mem_fun(*this, &ElementTransferList::receive_prev);
+  m_bindings[KEY_NPAGE] = sigc::mem_fun(*this, &ElementTransferList::receive_pagenext);
+  m_bindings[KEY_PPAGE] = sigc::mem_fun(*this, &ElementTransferList::receive_pageprev);
 }
 
 void
