@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -53,8 +53,6 @@ public:
   ThreadWorker();
   ~ThreadWorker();
 
-  const char*         name() const { return "rtorrent scgi"; }
-
   virtual void        init_thread();
 
   rpc::SCgi*          scgi() { return m_safe.scgi; }
@@ -63,6 +61,7 @@ public:
   void                set_xmlrpc_log(const std::string& filename);
 
   static void         start_scgi(ThreadBase* thread);
+  static void         start_log_counter(ThreadBase* thread);
   static void         msg_change_xmlrpc_log(ThreadBase* thread);
 
 private:
@@ -76,6 +75,7 @@ private:
     rpc::SCgi* scgi;
   };
 
+  rak::priority_item  m_taskTouchLog;
   safe_type           m_safe;
 
   // The following types shall only be modified while holding the

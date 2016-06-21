@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,8 +37,6 @@
 #include "config.h"
 
 #include <algorithm>
-#include <torrent/utils/log.h>
-#include <torrent/utils/option_strings.h>
 
 #include "globals.h"
 #include "control.h"
@@ -152,21 +150,21 @@ system_method_insert_object(const torrent::Object::list_type& args, int flags) {
   if (!(flags & rpc::object_storage::flag_private))
     cmd_flags |= rpc::CommandMap::flag_public_xmlrpc;
 
-  control->object_storage()->insert_str(rawKey, value, flags);
+  rpc::object_storage::iterator obj_itr =  control->object_storage()->insert_str(rawKey, value, flags);
 
   if ((flags & rpc::object_storage::mask_type) == rpc::object_storage::flag_function_type ||
       (flags & rpc::object_storage::mask_type) == rpc::object_storage::flag_multi_type) {
 
     rpc::commands.insert_slot<rpc::command_base_is_type<rpc::command_base_call<rpc::target_type> >::type>
-      (create_new_key(rawKey),
+      (create_new_key<0>(rawKey, ""),
        std::bind(&rpc::object_storage::call_function_str, control->object_storage(),
-                 rawKey, std::placeholders::_1, std::placeholders::_2),
+                      rawKey, std::placeholders::_1, std::placeholders::_2),
        &rpc::command_base_call<rpc::target_type>,
        cmd_flags, NULL, NULL);
 
   } else {
     rpc::commands.insert_slot<rpc::command_base_is_type<rpc::command_base_call<rpc::target_type> >::type>
-      (create_new_key(rawKey),
+      (create_new_key<0>(rawKey, ""),
        std::bind(&rpc::object_storage::get_str, control->object_storage(), rawKey),
        &rpc::command_base_call<rpc::target_type>,
        cmd_flags, NULL, NULL);
@@ -247,10 +245,6 @@ system_method_insert(const torrent::Object::list_type& args) {
 
   const std::string& options = itrArgs->as_string();
 
-  // TODO: Replace find with a method that does '|' separated search
-  // for all valid options, and then cross-checks that unmixable ones
-  // aren't in there. Use a bitfield.
-
   if (options.find("private") != std::string::npos)
     flags &= ~rpc::CommandMap::flag_public_xmlrpc;
   if (options.find("const") != std::string::npos)
@@ -293,7 +287,8 @@ system_method_insert(const torrent::Object::list_type& args) {
   } else if (options.find("value") != std::string::npos ||
              options.find("bool") != std::string::npos ||
              options.find("string") != std::string::npos ||
-             options.find("list") != std::string::npos) {
+             options.find("list") != std::string::npos ||
+             options.find("simple") != std::string::npos) {
     torrent::Object::list_type new_args;
     new_args.push_back(rawKey);
 
@@ -308,8 +303,6 @@ system_method_insert(const torrent::Object::list_type& args) {
       new_flags = rpc::object_storage::flag_bool_type;
     else if (options.find("string") != std::string::npos)
       new_flags = rpc::object_storage::flag_string_type;
-    else if (options.find("list") != std::string::npos)
-      new_flags = rpc::object_storage::flag_list_type;
     else if (options.find("simple") != std::string::npos)
       new_flags = rpc::object_storage::flag_function_type;
     else 
@@ -359,7 +352,7 @@ system_method_redirect(const torrent::Object::list_type& args) {
   std::string new_key  = torrent::object_create_string(args.front());
   std::string dest_key = torrent::object_create_string(args.back());
 
-  rpc::commands.create_redirect(create_new_key(new_key), create_new_key(dest_key),
+  rpc::commands.create_redirect(create_new_key<0>(new_key, ""), create_new_key<0>(dest_key, ""),
                                 rpc::CommandMap::flag_public_xmlrpc | rpc::CommandMap::flag_delete_key | rpc::CommandMap::flag_modifiable);
 
   return torrent::Object();
@@ -406,7 +399,7 @@ system_method_set_key(const torrent::Object::list_type& args) {
     return torrent::Object();
   }
 
-  if (itrArgs->is_dict_key() || itrArgs->is_list())
+  if (itrArgs->is_dict_key())
     control->object_storage()->set_str_multi_key_obj(key.c_str(), cmd_key, *itrArgs);
   else
     control->object_storage()->set_str_multi_key(key, cmd_key, system_method_generate_command(itrArgs, args.end()));
@@ -427,26 +420,18 @@ system_method_list_keys(const torrent::Object::string_type& args) {
   return rawResult;
 }
 
-torrent::Object
-cmd_catch(rpc::target_type target, const torrent::Object& args) {
-  try {
-    return rpc::call_object(args, target);
-  } catch (torrent::input_error& e) {
-    lt_log_print(torrent::LOG_WARN, "Caught exception: '%s'.", e.what());
-    return torrent::Object();
-  }
-}
-
 #define CMD2_METHOD_INSERT(key, flags) \
   CMD2_ANY_LIST(key, std::bind(&system_method_insert_object, std::placeholders::_2, flags));
 
 void
 initialize_command_dynamic() {
-  CMD2_VAR_BOOL    ("method.use_deprecated", false);
+  CMD2_VAR_BOOL    ("method.use_deprecated", true);
   CMD2_VAR_VALUE   ("method.use_intermediate", 1);
 
-  CMD2_ANY_LIST    ("method.insert",             std::bind(&system_method_insert, std::placeholders::_2));
-  CMD2_ANY_LIST    ("method.insert.value",       std::bind(&system_method_insert_object, std::placeholders::_2, rpc::object_storage::flag_value_type));
+  CMD2_ANY_LIST    ("method.insert",    std::bind(&system_method_insert, std::placeholders::_2));
+
+  CMD2_ANY_LIST    ("method.insert.value", std::bind(&system_method_insert_object, std::placeholders::_2,
+                                                          rpc::object_storage::flag_value_type));
 
   CMD2_METHOD_INSERT("method.insert.simple",     rpc::object_storage::flag_function_type);
   CMD2_METHOD_INSERT("method.insert.c_simple",   rpc::object_storage::flag_constant | rpc::object_storage::flag_function_type);
@@ -459,28 +444,10 @@ initialize_command_dynamic() {
                                                        std::placeholders::_2));
   CMD2_ANY_LIST    ("method.set",       std::bind(&system_method_set_function, std::placeholders::_2));
 
-  CMD2_ANY_STRING  ("method.const",        std::bind(&rpc::object_storage::has_flag_str, control->object_storage(),
-                                                      std::placeholders::_2, rpc::object_storage::flag_constant));
-  CMD2_ANY_STRING_V("method.const.enable", std::bind(&rpc::object_storage::enable_flag_str, control->object_storage(),
-                                                     std::placeholders::_2, rpc::object_storage::flag_constant));
-
   CMD2_ANY_LIST    ("method.has_key",   std::bind(&system_method_has_key, std::placeholders::_2));
   CMD2_ANY_LIST    ("method.set_key",   std::bind(&system_method_set_key, std::placeholders::_2));
   CMD2_ANY_STRING  ("method.list_keys", std::bind(&system_method_list_keys, std::placeholders::_2));
 
   CMD2_ANY_STRING  ("method.rlookup",       std::bind(&rpc::object_storage::rlookup_obj_list, control->object_storage(), std::placeholders::_2));
   CMD2_ANY_STRING_V("method.rlookup.clear", std::bind(&rpc::object_storage::rlookup_clear, control->object_storage(), std::placeholders::_2));
-
-  CMD2_ANY         ("catch", std::bind(&cmd_catch, std::placeholders::_1, std::placeholders::_2));
-
-  CMD2_ANY         ("strings.choke_heuristics",          std::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS));
-  CMD2_ANY         ("strings.choke_heuristics.upload",   std::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS_UPLOAD));
-  CMD2_ANY         ("strings.choke_heuristics.download", std::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS_DOWNLOAD));
-  CMD2_ANY         ("strings.connection_type",           std::bind(&torrent::option_list_strings, torrent::OPTION_CONNECTION_TYPE));
-  CMD2_ANY         ("strings.encryption",                std::bind(&torrent::option_list_strings, torrent::OPTION_ENCRYPTION));
-  CMD2_ANY         ("strings.ip_filter",                 std::bind(&torrent::option_list_strings, torrent::OPTION_IP_FILTER));
-  CMD2_ANY         ("strings.ip_tos",                    std::bind(&torrent::option_list_strings, torrent::OPTION_IP_TOS));
-  CMD2_ANY         ("strings.log_group",                 std::bind(&torrent::option_list_strings, torrent::OPTION_LOG_GROUP));
-  CMD2_ANY         ("strings.tracker_event",             std::bind(&torrent::option_list_strings, torrent::OPTION_TRACKER_EVENT));
-  CMD2_ANY         ("strings.tracker_mode",              std::bind(&torrent::option_list_strings, torrent::OPTION_TRACKER_MODE));
 }

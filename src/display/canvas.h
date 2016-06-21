@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -62,10 +62,10 @@ public:
   static void         resize_term(int x, int y)                               { resizeterm(y, x); }
   static void         resize_term(std::pair<int, int> dim)                    { resizeterm(dim.second, dim.first); }
 
-  unsigned int        get_x()                                                 { int x, __UNUSED y; getyx(m_window, y, x); return x; }
+  unsigned int        get_x()                                                 { int x, y; getyx(m_window, y, x); return x; }
   unsigned int        get_y()                                                 { int x, y; getyx(m_window, y, x); return y; }
 
-  unsigned int        width()                                                 { int x, __UNUSED y; getmaxyx(m_window, y, x); return x; }
+  unsigned int        width()                                                 { int x, y; getmaxyx(m_window, y, x); return x; }
   unsigned int        height()                                                { int x, y; getmaxyx(m_window, y, x); return y; }
 
   void                move(unsigned int x, unsigned int y)                    { wmove(m_window, y, x); }
@@ -95,13 +95,13 @@ public:
 
   void                set_attr(unsigned int x, unsigned int y, unsigned int n, int attr, int color) { mvwchgat(m_window, y, x, n, attr, color, NULL); }
 
-  void                set_default_attributes(int attr)                            { (void)wattrset(m_window, attr); }
+  void                set_default_attributes(int attr)                            { wattrset(m_window, attr); }
 
   // Initialize stdscr.
   static void         initialize();
   static void         cleanup();
 
-  static int          get_screen_width()                                      { int x, __UNUSED y; getmaxyx(stdscr, y, x); return x; }
+  static int          get_screen_width()                                      { int x, y; getmaxyx(stdscr, y, x); return x; }
   static int          get_screen_height()                                     { int x, y; getmaxyx(stdscr, y, x); return y; }
 
   static std::pair<int, int> term_size();

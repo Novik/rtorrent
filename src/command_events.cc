@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,14 +38,12 @@
 
 #include <functional>
 #include <cstdio>
-#include <rak/error_number.h>
 #include <rak/file_stat.h>
 #include <rak/path.h>
 #include <rak/string_manip.h>
+#include <sigc++/adaptors/bind.h>
 #include <torrent/rate.h>
 #include <torrent/hash_string.h>
-#include <torrent/utils/log.h>
-#include <torrent/utils/directory_events.h>
 
 #include "core/download.h"
 #include "core/download_list.h"
@@ -237,7 +235,7 @@ apply_close_low_diskspace(int64_t arg) {
   }
 
   if (closed)
-    lt_log_print(torrent::LOG_TORRENT_ERROR, "Closed torrents due to low diskspace.");    
+    control->core()->push_log("Closed torrents due to low diskspace.");    
 
   return torrent::Object();
 }
@@ -287,18 +285,13 @@ d_multicall(const torrent::Object::list_type& args) {
 
   // Add some pre-parsing of the commands, so we don't spend time
   // parsing and searching command map for every single call.
-  unsigned int dlist_size = (*viewItr)->size_visible();
-  core::Download* dlist[dlist_size];
-
-  std::copy((*viewItr)->begin_visible(), (*viewItr)->end_visible(), dlist);
-
   torrent::Object             resultRaw = torrent::Object::create_list();
   torrent::Object::list_type& result = resultRaw.as_list();
 
-  for (core::Download** vItr = dlist; vItr != dlist + dlist_size; vItr++) {
+  for (core::View::const_iterator vItr = (*viewItr)->begin_visible(), vLast = (*viewItr)->end_visible(); vItr != vLast; vItr++) {
     torrent::Object::list_type& row = result.insert(result.end(), torrent::Object::create_list())->as_list();
 
-    for (torrent::Object::list_const_iterator cItr = ++args.begin(); cItr != args.end(); cItr++) {
+    for (torrent::Object::list_const_iterator cItr = ++args.begin(), cLast = args.end(); cItr != args.end(); cItr++) {
       const std::string& cmd = cItr->as_string();
       row.push_back(rpc::parse_command(rpc::make_target(*vItr), cmd.c_str(), cmd.c_str() + cmd.size()).first);
     }
@@ -307,30 +300,17 @@ d_multicall(const torrent::Object::list_type& args) {
   return resultRaw;
 }
 
-static void
-call_watch_command(const std::string& command, const std::string& path) {
-  rpc::commands.call_catch(command.c_str(), rpc::make_target(), path);
-}
-
 torrent::Object
-directory_watch_added(const torrent::Object::list_type& args) {
-  if (args.size() != 2)
-    throw torrent::input_error("Too few arguments.");
+test_thread_locking() {
+  worker_thread->queue_item(&ThreadWorker::start_log_counter);
 
-  const std::string& path = args.front().as_string();
-  const std::string& command = args.back().as_string();
-
-  if (!control->directory_events()->open())
-    throw torrent::input_error("Could not open inotify:" + std::string(rak::error_number::current().c_str()));
-
-  control->directory_events()->notify_on(path.c_str(),
-                                         torrent::directory_events::flag_on_added | torrent::directory_events::flag_on_updated,
-                                         std::bind(&call_watch_command, command, std::placeholders::_1));
   return torrent::Object();
 }
 
 void
 initialize_command_events() {
+  CMD2_ANY("test.thread_locking", std::bind(&test_thread_locking));
+
   CMD2_ANY_STRING  ("on_ratio",        std::bind(&apply_on_ratio, std::placeholders::_2));
 
   CMD2_ANY         ("start_tied",      std::bind(&apply_start_tied));
@@ -353,12 +333,9 @@ initialize_command_events() {
   CMD2_ANY_LIST    ("load.raw_verbose",   std::bind(&apply_load, std::placeholders::_2, core::Manager::create_raw_data));
   CMD2_ANY_LIST    ("load.raw_start",     std::bind(&apply_load, std::placeholders::_2,
                                                          core::Manager::create_quiet | core::Manager::create_start | core::Manager::create_raw_data));
-  CMD2_ANY_LIST    ("load.raw_start_verbose", std::bind(&apply_load, std::placeholders::_2, core::Manager::create_start | core::Manager::create_raw_data));
 
   CMD2_ANY_VALUE   ("close_low_diskspace", std::bind(&apply_close_low_diskspace, std::placeholders::_2));
 
   CMD2_ANY_LIST    ("download_list",       std::bind(&apply_download_list, std::placeholders::_2));
   CMD2_ANY_LIST    ("d.multicall2",        std::bind(&d_multicall, std::placeholders::_2));
-
-  CMD2_ANY_LIST    ("directory.watch.added", std::bind(&directory_watch_added, std::placeholders::_2));
 }

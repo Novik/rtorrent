@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,36 +46,25 @@
 
 #include "exec_file.h"
 #include "parse.h"
-#include "thread_base.h"
 
 namespace rpc {
-
-const unsigned int ExecFile::max_args;
-const unsigned int ExecFile::buffer_size;
-    
-const int ExecFile::flag_expand_tilde;
-const int ExecFile::flag_throw;
-const int ExecFile::flag_capture;
-const int ExecFile::flag_background;
 
 // Close m_logFd.
 
 int
 ExecFile::execute(const char* file, char* const* argv, int flags) {
   // Write the execued command and its parameters to the log fd.
-  int __UNUSED result;
-
   if (m_logFd != -1) {
     for (char* const* itr = argv; *itr != NULL; itr++) {
       if (itr == argv)
-        result = write(m_logFd, "\n---\n", sizeof("\n---\n"));
+        write(m_logFd, "\n---\n", sizeof("\n---\n"));
       else
-        result = write(m_logFd, " ", 1);
+        write(m_logFd, " ", 1);
 
-      result = write(m_logFd, *itr, std::strlen(*itr));
+      write(m_logFd, *itr, std::strlen(*itr));
     }
 
-    result = write(m_logFd, "\n---\n", sizeof("\n---\n"));
+    write(m_logFd, "\n---\n", sizeof("\n---\n"));
   }
 
   int pipeFd[2];
@@ -89,23 +78,6 @@ ExecFile::execute(const char* file, char* const* argv, int flags) {
     throw torrent::input_error("ExecFile::execute(...) Fork failed.");
 
   if (childPid == 0) {
-    if (flags & flag_background) {
-      pid_t detached_pid = fork();
-
-      if (detached_pid == -1)
-        _exit(-1);
-
-      if (detached_pid != 0) {
-        if (m_logFd != -1)
-          result = write(m_logFd, "\n--- Background task ---\n", sizeof("\n--- Background task ---\n"));
-        
-        _exit(0);
-      }
-
-      m_logFd = -1;
-      flags &= ~flag_capture;
-    }
-
     int devNull = open("/dev/null", O_RDWR);
     if (devNull != -1)
       dup2(devNull, 0);
@@ -135,55 +107,57 @@ ExecFile::execute(const char* file, char* const* argv, int flags) {
     int result = execvp(file, argv);
 
     _exit(result);
-  }
 
-  // We yield the global lock when waiting for the executed command to
-  // finish so that XMLRPC and other threads can continue working.
-  ThreadBase::release_global_lock();
+  } else {
+    if (flags & flag_capture) {
+      m_capture = std::string();
+      ::close(pipeFd[1]);
 
-  if (flags & flag_capture) {
-    m_capture = std::string();
-    ::close(pipeFd[1]);
+      char buffer[4096];
+      ssize_t length;
 
-    char buffer[4096];
-    ssize_t length;
+      do {
+        length = read(pipeFd[0], buffer, sizeof(buffer));
+
+        if (length > 0)
+          m_capture += std::string(buffer, length);
+      } while (length > 0);
+
+      ::close(pipeFd[0]);
+
+      if (m_logFd != -1) {
+        write(m_logFd, "Captured output:\n", sizeof("Captured output:\n"));
+        write(m_logFd, m_capture.data(), m_capture.length());
+      }
+    }
+
+    if (flags & flag_background) {
+      if (m_logFd != -1)
+        write(m_logFd, "\n--- Background task ---\n", sizeof("\n--- Background task ---\n"));
+        
+      return 0;
+    }
+
+    int status;
+    int wpid;
 
     do {
-      length = read(pipeFd[0], buffer, sizeof(buffer));
+      wpid = waitpid(childPid, &status, 0);
+    } while (wpid == -1 && rak::error_number::current().value() == rak::error_number::e_intr);
 
-      if (length > 0)
-        m_capture += std::string(buffer, length);
-    } while (length > 0);
+    if (wpid != childPid)
+      throw torrent::internal_error("ExecFile::execute(...) waitpid failed.");
 
-    ::close(pipeFd[0]);
-
+    // Check return value?
     if (m_logFd != -1) {
-      result = write(m_logFd, "Captured output:\n", sizeof("Captured output:\n"));
-      result = write(m_logFd, m_capture.data(), m_capture.length());
+      if (status == 0)
+        write(m_logFd, "\n--- Success ---\n", sizeof("\n--- Success ---\n"));
+      else
+        write(m_logFd, "\n--- Error ---\n", sizeof("\n--- Error ---\n"));
     }
+
+    return status;
   }
-
-  int status;
-  int wpid;
-
-  do {
-    wpid = waitpid(childPid, &status, 0);
-  } while (wpid == -1 && rak::error_number::current().value() == rak::error_number::e_intr);
-
-  ThreadBase::acquire_global_lock();
-
-  if (wpid != childPid)
-    throw torrent::internal_error("ExecFile::execute(...) waitpid failed.");
-
-  // Check return value?
-  if (m_logFd != -1) {
-    if (status == 0)
-      result = write(m_logFd, "\n--- Success ---\n", sizeof("\n--- Success ---\n"));
-    else
-      result = write(m_logFd, "\n--- Error ---\n", sizeof("\n--- Error ---\n"));
-  }
-
-  return status;
 }
 
 torrent::Object

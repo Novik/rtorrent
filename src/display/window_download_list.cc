@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,27 +48,18 @@
 
 namespace display {
 
-WindowDownloadList::WindowDownloadList() :
-  Window(new Canvas, 0, 120, 1, extent_full, extent_full),
-  m_view(NULL) {
-}
-
 WindowDownloadList::~WindowDownloadList() {
-  if (m_view != NULL)
-    m_view->signal_changed().erase(m_changed_itr);
-  
-  m_view = NULL;
+  m_connChanged.disconnect();
 }
 
 void
 WindowDownloadList::set_view(core::View* l) {
-  if (m_view != NULL)
-    m_view->signal_changed().erase(m_changed_itr);
-
   m_view = l;
 
+  m_connChanged.disconnect();
+
   if (m_view != NULL)
-    m_changed_itr = m_view->signal_changed().insert(m_view->signal_changed().begin(), std::bind(&Window::mark_dirty, this));
+    m_connChanged = m_view->signal_changed().connect(sigc::mem_fun(*this, &Window::mark_dirty));
 }
 
 void
@@ -102,15 +93,16 @@ WindowDownloadList::redraw() {
 
   while (range.first != range.second) {
     char buffer[m_canvas->width() + 1];
+    char* position;
     char* last = buffer + m_canvas->width() - 2 + 1;
 
-    print_download_title(buffer, last, *range.first);
+    position = print_download_title(buffer, last, *range.first);
     m_canvas->print(0, pos++, "%c %s", range.first == m_view->focus() ? '*' : ' ', buffer);
     
-    print_download_info(buffer, last, *range.first);
+    position = print_download_info(buffer, last, *range.first);
     m_canvas->print(0, pos++, "%c %s", range.first == m_view->focus() ? '*' : ' ', buffer);
 
-    print_download_status(buffer, last, *range.first);
+    position = print_download_status(buffer, last, *range.first);
     m_canvas->print(0, pos++, "%c %s", range.first == m_view->focus() ? '*' : ' ', buffer);
 
     ++range.first;

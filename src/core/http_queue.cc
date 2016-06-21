@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,6 +38,8 @@
 
 #include <memory>
 #include <sstream>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
 #include <torrent/http.h>
 
 #include "rak/functional.h"
@@ -48,34 +50,31 @@ namespace core {
 
 HttpQueue::iterator
 HttpQueue::insert(const std::string& url, std::iostream* s) {
-  std::auto_ptr<CurlGet> h(m_slot_factory());
+  std::auto_ptr<CurlGet> h(m_slotFactory());
   
   h->set_url(url);
   h->set_stream(s);
   h->set_timeout(5 * 60);
 
-  iterator signal_itr = base_type::insert(end(), h.get());
+  iterator itr = Base::insert(end(), h.get());
 
-  h->signal_done().push_back(std::bind(&HttpQueue::erase, this, signal_itr));
-  h->signal_failed().push_back(std::bind(&HttpQueue::erase, this, signal_itr));
+  h->signal_done().connect(sigc::bind(sigc::mem_fun(this, &HttpQueue::erase), itr));
+  h->signal_failed().connect(sigc::bind<0>(sigc::hide(sigc::mem_fun(this, &HttpQueue::erase)), itr));
 
-  (*signal_itr)->start();
+  (*itr)->start();
 
   h.release();
+  m_signalInsert.emit(*itr);
 
-  for (signal_curl_get::iterator itr = m_signal_insert.begin(), last = m_signal_insert.end(); itr != last; itr++)
-    (*itr)(*signal_itr);
-
-  return signal_itr;
+  return itr;
 }
 
 void
-HttpQueue::erase(iterator signal_itr) {
-  for (signal_curl_get::iterator itr = m_signal_erase.begin(), last = m_signal_erase.end(); itr != last; itr++)
-    (*itr)(*signal_itr);
+HttpQueue::erase(iterator itr) {
+  m_signalErase.emit(*itr);
 
-  delete *signal_itr;
-  base_type::erase(signal_itr);
+  delete *itr;
+  Base::erase(itr);
 }
 
 void
@@ -83,7 +82,7 @@ HttpQueue::clear() {
   while (!empty())
     erase(begin());
 
-  base_type::clear();
+  Base::clear();
 }
 
 }

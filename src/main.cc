@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,22 +36,14 @@
 
 #include "config.h"
 
-#define __STDC_FORMAT_MACROS
-
 #include <cstdlib>
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <inttypes.h>
-#include <unistd.h>
+#include <sigc++/adaptors/bind.h>
 #include <torrent/http.h>
 #include <torrent/torrent.h>
 #include <torrent/exceptions.h>
-#include <torrent/poll.h>
-#include <torrent/data/chunk_utils.h>
-#include <torrent/utils/log.h>
 #include <rak/functional.h>
-#include <rak/error_number.h>
 
 #ifdef USE_EXECINFO
 #include <execinfo.h>
@@ -78,15 +70,14 @@
 #include "signal_handler.h"
 #include "option_parser.h"
 
+#include "thread_main.h"
 #include "thread_worker.h"
 
-void handle_sigbus(int signum, siginfo_t* sa, void* ptr);
 void do_panic(int signum);
 void print_help();
 void initialize_commands();
 
 void do_nothing() {}
-void do_nothing_str(const std::string&) {}
 
 int
 parse_options(Control* c, int argc, char** argv) {
@@ -94,20 +85,20 @@ parse_options(Control* c, int argc, char** argv) {
     OptionParser optionParser;
 
     // Converted.
-    optionParser.insert_flag('h', std::bind(&print_help));
-    optionParser.insert_flag('n', std::bind(&do_nothing_str, std::placeholders::_1));
-    optionParser.insert_flag('D', std::bind(&do_nothing_str, std::placeholders::_1));
-    optionParser.insert_flag('I', std::bind(&do_nothing_str, std::placeholders::_1));
-    optionParser.insert_flag('K', std::bind(&do_nothing_str, std::placeholders::_1));
+    optionParser.insert_flag('h', sigc::ptr_fun(&print_help));
+    optionParser.insert_flag('n', OptionParser::Slot());
+    optionParser.insert_flag('D', OptionParser::Slot());
+    optionParser.insert_flag('I', OptionParser::Slot());
+    optionParser.insert_flag('K', OptionParser::Slot());
 
-    optionParser.insert_option('b', std::bind(&rpc::call_command_set_string, "network.bind_address.set", std::placeholders::_1));
-    optionParser.insert_option('d', std::bind(&rpc::call_command_set_string, "directory.default.set", std::placeholders::_1));
-    optionParser.insert_option('i', std::bind(&rpc::call_command_set_string, "ip", std::placeholders::_1));
-    optionParser.insert_option('p', std::bind(&rpc::call_command_set_string, "network.port_range.set", std::placeholders::_1));
-    optionParser.insert_option('s', std::bind(&rpc::call_command_set_string, "session", std::placeholders::_1));
+    optionParser.insert_option('b', sigc::bind<0>(sigc::ptr_fun(&rpc::call_command_set_string), "network.bind_address.set"));
+    optionParser.insert_option('d', sigc::bind<0>(sigc::ptr_fun(&rpc::call_command_set_string), "directory.default.set"));
+    optionParser.insert_option('i', sigc::bind<0>(sigc::ptr_fun(&rpc::call_command_set_string), "ip"));
+    optionParser.insert_option('p', sigc::bind<0>(sigc::ptr_fun(&rpc::call_command_set_string), "network.port_range.set"));
+    optionParser.insert_option('s', sigc::bind<0>(sigc::ptr_fun(&rpc::call_command_set_string), "session"));
 
-    optionParser.insert_option('O',      std::bind(&rpc::parse_command_single_std, std::placeholders::_1));
-    optionParser.insert_option_list('o', std::bind(&rpc::call_command_set_std_string, std::placeholders::_1, std::placeholders::_2));
+    optionParser.insert_option('O', sigc::ptr_fun(&rpc::parse_command_single_std));
+    optionParser.insert_option_list('o', sigc::ptr_fun(&rpc::call_command_set_std_string));
 
     return optionParser.process(argc, argv);
 
@@ -131,7 +122,7 @@ load_session_torrents(Control* c) {
 
     // Replace with session torrent flag.
     f->set_session(true);
-    f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+    f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
     f->load(entries.path() + first->d_name);
     f->commit();
   }
@@ -145,35 +136,20 @@ load_arg_torrents(Control* c, char** first, char** last) {
 
     // Replace with session torrent flag.
     f->set_start(true);
-    f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+    f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
     f->load(*first);
     f->commit();
   }
 }
 
-static uint64_t
+static inline rak::timer
 client_next_timeout(Control* c) {
   if (taskScheduler.empty())
-    return (c->is_shutdown_started() ? rak::timer::from_milliseconds(100) : rak::timer::from_seconds(60)).usec();
+    return c->is_shutdown_started() ? rak::timer::from_milliseconds(100) : rak::timer::from_seconds(60);
   else if (taskScheduler.top()->time() <= cachedTime)
     return 0;
   else
-    return (taskScheduler.top()->time() - cachedTime).usec();
-}
-
-static void
-client_perform() {
-  // Use throw exclusively.
-  if (control->is_shutdown_completed())
-    throw torrent::shutdown_exception();
-
-  if (control->is_shutdown_received())
-    control->handle_shutdown();
-
-  control->inc_tick();
-
-  cachedTime = rak::timer::current();
-  rak::priority_queue_perform(&taskScheduler, cachedTime);
+    return taskScheduler.top()->time() - cachedTime;
 }
 
 int
@@ -185,67 +161,62 @@ main(int argc, char** argv) {
 
     cachedTime = rak::timer::current();
 
-    // Initialize logging:
-    torrent::log_initialize();
-
     control = new Control;
     
-    srandom(cachedTime.usec() ^ (getpid() << 16) ^ getppid());
-    srand48(cachedTime.usec() ^ (getpid() << 16) ^ getppid());
-
-    SignalHandler::set_ignore(SIGPIPE);
-    SignalHandler::set_handler(SIGINT,   std::bind(&Control::receive_normal_shutdown, control));
-    SignalHandler::set_handler(SIGTERM,  std::bind(&Control::receive_quick_shutdown, control));
-    SignalHandler::set_handler(SIGWINCH, std::bind(&display::Manager::force_redraw, control->display()));
-    SignalHandler::set_handler(SIGSEGV,  std::bind(&do_panic, SIGSEGV));
-    SignalHandler::set_handler(SIGILL,   std::bind(&do_panic, SIGILL));
-    SignalHandler::set_handler(SIGFPE,   std::bind(&do_panic, SIGFPE));
-
-    SignalHandler::set_sigaction_handler(SIGBUS, &handle_sigbus);
-
-    // SIGUSR1 is used for interrupting polling, forcing the target
-    // thread to process new non-socket events.
-    //
-    // LibTorrent uses sockets for this purpose on Solaris and other
-    // platforms that do not properly pass signals to the target
-    // threads. Use '--enable-interrupt-socket' when configuring
-    // LibTorrent to enable this workaround.
-    if (torrent::thread_base::should_handle_sigusr1())
-      SignalHandler::set_handler(SIGUSR1, std::bind(&do_nothing));
-
-    torrent::log_add_group_output(torrent::LOG_NOTICE, "important");
-    torrent::log_add_group_output(torrent::LOG_INFO, "complete");
-
-    torrent::Poll::slot_create_poll() = std::bind(&core::create_poll);
-
-    torrent::initialize();
-    torrent::main_thread()->slot_do_work() = std::bind(&client_perform);
-    torrent::main_thread()->slot_next_timeout() = std::bind(&client_next_timeout, control);
+    main_thread = new ThreadMain();
+    main_thread->init_thread();
 
     worker_thread = new ThreadWorker();
     worker_thread->init_thread();
+
+    srandom(cachedTime.usec());
+    srand48(cachedTime.usec());
+
+    SignalHandler::set_ignore(SIGPIPE);
+    SignalHandler::set_handler(SIGINT,   sigc::mem_fun(control, &Control::receive_normal_shutdown));
+    SignalHandler::set_handler(SIGTERM,  sigc::mem_fun(control, &Control::receive_quick_shutdown));
+    SignalHandler::set_handler(SIGWINCH, sigc::mem_fun(control->display(), &display::Manager::force_redraw));
+    SignalHandler::set_handler(SIGSEGV,  sigc::bind(sigc::ptr_fun(&do_panic), SIGSEGV));
+    SignalHandler::set_handler(SIGILL,   sigc::bind(sigc::ptr_fun(&do_panic), SIGILL));
+    SignalHandler::set_handler(SIGBUS,   sigc::bind(sigc::ptr_fun(&do_panic), SIGBUS));
+    SignalHandler::set_handler(SIGFPE,   sigc::bind(sigc::ptr_fun(&do_panic), SIGFPE));
+
+    // SIGUSR1 is used for interrupting polling, forcing that thread
+    // to process new non-socket events.
+    SignalHandler::set_handler(SIGUSR1,  sigc::ptr_fun(&do_nothing));
+
+    torrent::initialize(main_thread->poll());
 
     // Initialize option handlers after libtorrent to ensure
     // torrent::ConnectionManager* are valid etc.
     initialize_commands();
 
     if (OptionParser::has_flag('D', argc, argv)) {
-      rpc::call_command_set_value("method.use_deprecated.set", true);
-      lt_log_print(torrent::LOG_WARN, "Disabled deprecated commands.");
+      rpc::call_command_set_value("method.use_deprecated.set", false);
+      control->core()->push_log("Disabled deprecated commands.");
     }
 
     if (OptionParser::has_flag('I', argc, argv)) {
       rpc::call_command_set_value("method.use_intermediate.set", 0);
-      lt_log_print(torrent::LOG_WARN, "Disabled intermediate commands.");
+      control->core()->push_log("Disabled intermediate commands.");
     }
 
     if (OptionParser::has_flag('K', argc, argv)) {
       rpc::call_command_set_value("method.use_intermediate.set", 2);
-      lt_log_print(torrent::LOG_WARN, "Allowing intermediate commands without xmlrpc.");
+      control->core()->push_log("Allowing intermediate commands without xmlrpc.");
     }
 
     rpc::parse_command_multiple
       (rpc::make_target(),
+//        "method.insert = test.value,value\n"
+//        "method.insert = test.value2,value,6\n"
+
+//        "method.insert = test.string,string,6\n"
+//        "method.insert = test.bool,bool,true\n"
+
+       // "method.insert.simple = test.method.simple,((print,simple_test_,$argument.0=))\n"
+       // "method.insert.simple = test.method.double,((print,simple_test_,$argument.0=)),\"print=simple_test_,$argument.1=\"\n"
+
        "method.insert = event.download.inserted,multi|rlookup|static\n"
        "method.insert = event.download.inserted_new,multi|rlookup|static\n"
        "method.insert = event.download.inserted_session,multi|rlookup|static\n"
@@ -262,17 +233,16 @@ main(int argc, char** argv) {
        "method.insert = event.download.hash_removed,multi|rlookup|static\n"
        "method.insert = event.download.hash_queued,multi|rlookup|static\n"
 
-       "method.set_key = event.download.inserted,         1_send_scrape, ((d.tracker.send_scrape,30))\n"
-       "method.set_key = event.download.inserted_new,     1_prepare, {(branch,((d.state)),((view.set_visible,started)),((view.set_visible,stopped)) ),(d.save_full_session)}\n"
-       "method.set_key = event.download.inserted_session, 1_prepare, {(branch,((d.state)),((view.set_visible,started)),((view.set_visible,stopped)) )}\n"
+       "method.set_key = event.download.inserted,         1_connect_logs, d.initialize_logs=\n"
+       "method.set_key = event.download.inserted_new,     1_prepare, \"branch=d.state=,view.set_visible=started,view.set_visible=stopped ;d.save_full_session=\"\n"
+       "method.set_key = event.download.inserted_session, 1_prepare, \"branch=d.state=,view.set_visible=started,view.set_visible=stopped\"\n"
 
        "method.set_key = event.download.inserted, 1_prioritize_toc, \"branch=file.prioritize_toc=,{\\\"f.multicall=(file.prioritize_toc.first),f.prioritize_first.enable=\\\",\\\"f.multicall=(file.prioritize_toc.last),f.prioritize_last.enable=\\\",d.update_priorities=}\"\n"
 
        "method.set_key = event.download.erased, !_download_list, ui.unfocus_download=\n"
        "method.set_key = event.download.erased, ~_delete_tied, d.delete_tied=\n"
 
-       "method.set_key = event.download.resumed,   !_timestamp, ((d.timestamp.started.set_if_z, ((system.time)) ))\n"
-       "method.set_key = event.download.finished,  !_timestamp, ((d.timestamp.finished.set_if_z, ((system.time)) ))\n"
+       "method.set_key = event.download.finished,  !_timestamp, ((d.timestamp.finished.set, ((system.time)) ))\n"
 
        "method.insert.c_simple = group.insert_persistent_view,"
        "((view.add,((argument.0)))),((view.persistent,((argument.0)))),((group.insert,((argument.0)),((argument.0))))\n"
@@ -290,7 +260,7 @@ main(int argc, char** argv) {
 
        "group.insert = seeding,seeding\n"
 
-       "session.name.set = (cat,(system.hostname),:,(system.pid))\n"
+       "session.name.set = \"$cat=$system.hostname=,:,$system.pid=\"\n"
 
        // Currently not doing any sorting on main.
        "view.add = main\n"
@@ -305,36 +275,46 @@ main(int argc, char** argv) {
 
        "view.add = started\n"
        "view.filter = started,((false))\n"
-       "view.event_added   = started,{(view.set_not_visible,stopped),(d.state.set,1),(scheduler.simple.added)}\n"
-       "view.event_removed = started,{(view.set_visible,stopped),(scheduler.simple.removed)}\n"
+       "view.event_added   = started,\"view.set_not_visible=stopped ;d.state.set=1 ;scheduler.simple.added=\"\n"
+       "view.event_removed = started,\"view.set_visible=stopped ;scheduler.simple.removed=\"\n"
 
        "view.add = stopped\n"
        "view.filter = stopped,((false))\n"
-       "view.event_added   = stopped,{(d.state.set,0),(view.set_not_visible,started)}\n"
-       "view.event_removed = stopped,((view.set_visible,started))\n"
+       "view.event_added   = stopped,\"d.state.set=0 ;view.set_not_visible=started\"\n"
+       "view.event_removed = stopped,view.set_visible=started\n"
 
        "view.add = complete\n"
        "view.filter = complete,((d.complete))\n"
        "view.filter_on    = complete,event.download.hash_done,event.download.hash_failed,event.download.hash_final_failed,event.download.finished\n"
+       // "view.sort_new     = complete,((less,((d.state_changed))))\n"
+       // "view.sort_current = complete,((less,((d.state_changed))))\n"
 
        "view.add = incomplete\n"
        "view.filter = incomplete,((not,((d.complete))))\n"
        "view.filter_on    = incomplete,event.download.hash_done,event.download.hash_failed,"
                                       "event.download.hash_final_failed,event.download.finished\n"
+       // "view.sort_new     = incomplete,((less,((d.state_changed))))\n"
+       // "view.sort_current = incomplete,((less,((d.state_changed))))\n"
 
        // The hashing view does not include stopped torrents.
        "view.add = hashing\n"
        "view.filter = hashing,((d.hashing))\n"
        "view.filter_on = hashing,event.download.hash_queued,event.download.hash_removed,"
                                 "event.download.hash_done,event.download.hash_failed,event.download.hash_final_failed,event.download.finished\n"
+//        "view.sort_new     = hashing,less=d.state_changed=\n"
+//        "view.sort_current = hashing,less=d.state_changed=\n"
 
        "view.add    = seeding\n"
        "view.filter = seeding,((and,((d.state)),((d.complete))))\n"
-       "view.filter_on = seeding,event.download.resumed,event.download.paused,event.download.finished\n"
+       "view.filter_on    = seeding,event.download.resumed,event.download.paused,event.download.finished\n"
+       // "view.sort_new     = seeding,((less,((d.state_changed))))\n"
+       // "view.sort_current = seeding,((less,((d.state_changed))))\n"
 
        "view.add    = leeching\n"
        "view.filter = leeching,((and,((d.state)),((not,((d.complete))))))\n"
-       "view.filter_on = leeching,event.download.resumed,event.download.paused,event.download.finished\n"
+       "view.filter_on    = leeching,event.download.resumed,event.download.paused,event.download.finished\n"
+       // "view.sort_new     = leeching,((less,((d.state_changed))))\n"
+       // "view.sort_current = leeching,((less,((d.state_changed))))\n"
 
        "schedule2 = view.main,10,10,((view.sort,main,20))\n"
        "schedule2 = view.name,10,10,((view.sort,name,20))\n"
@@ -372,10 +352,7 @@ main(int argc, char** argv) {
     CMD2_REDIRECT        ("min_peers_seed", "throttle.min_peers.seed.set");
     CMD2_REDIRECT        ("max_peers_seed", "throttle.max_peers.seed.set");
 
-    CMD2_REDIRECT        ("min_uploads",   "throttle.min_uploads.set");
-    CMD2_REDIRECT        ("max_uploads",   "throttle.max_uploads.set");
-    CMD2_REDIRECT        ("min_downloads", "throttle.min_downloads.set");
-    CMD2_REDIRECT        ("max_downloads", "throttle.max_downloads.set");
+    CMD2_REDIRECT        ("max_uploads", "throttle.max_uploads.set");
 
     CMD2_REDIRECT        ("max_uploads_div",      "throttle.max_uploads.div.set");
     CMD2_REDIRECT        ("max_uploads_global",   "throttle.max_uploads.global.set");
@@ -394,25 +371,10 @@ main(int argc, char** argv) {
     CMD2_REDIRECT        ("port_random", "network.port_random.set");
     CMD2_REDIRECT        ("proxy_address", "network.proxy_address.set");
 
-    CMD2_REDIRECT        ("scgi_port", "network.scgi.open_port");
-    CMD2_REDIRECT        ("scgi_local", "network.scgi.open_local");
-
     CMD2_REDIRECT_GENERIC("directory", "directory.default.set");
     CMD2_REDIRECT_GENERIC("session",   "session.path.set");
 
-    CMD2_REDIRECT        ("check_hash", "pieces.hash.on_completion.set");
-
     CMD2_REDIRECT        ("key_layout", "keys.layout.set");
-
-    CMD2_REDIRECT_GENERIC("to_gm_time", "convert.gm_time");
-    CMD2_REDIRECT_GENERIC("to_gm_date", "convert.gm_date");
-    CMD2_REDIRECT_GENERIC("to_time", "convert.time");
-    CMD2_REDIRECT_GENERIC("to_date", "convert.date");
-    CMD2_REDIRECT_GENERIC("to_elapsed_time", "convert.elapsed_time");
-    CMD2_REDIRECT_GENERIC("to_kb", "convert.kb");
-    CMD2_REDIRECT_GENERIC("to_mb", "convert.mb");
-    CMD2_REDIRECT_GENERIC("to_xb", "convert.xb");
-    CMD2_REDIRECT_GENERIC("to_throttle", "convert.throttle");
 
     // Deprecated commands. Don't use these anymore.
 
@@ -449,6 +411,11 @@ main(int argc, char** argv) {
       CMD2_REDIRECT_GENERIC("set_session", "session.path.set");
 
       CMD2_REDIRECT        ("session_save", "session.save");
+
+      CMD2_REDIRECT        ("get_handshake_log", "log.handshake");
+      CMD2_REDIRECT_GENERIC("set_handshake_log", "log.handshake.set");
+      CMD2_REDIRECT        ("get_log.tracker", "log.tracker");
+      CMD2_REDIRECT_GENERIC("set_log.tracker", "log.tracker.set");
 
       CMD2_REDIRECT        ("get_name", "session.name");
       CMD2_REDIRECT_GENERIC("set_name", "session.name.set");
@@ -571,6 +538,10 @@ main(int argc, char** argv) {
       CMD2_REDIRECT_GENERIC("set_proxy_address", "network.proxy_address.set");
       CMD2_REDIRECT        ("get_proxy_address", "network.proxy_address");
 
+      CMD2_REDIRECT        ("scgi_port", "network.scgi.open_port");
+      CMD2_REDIRECT        ("scgi_local", "network.scgi.open_local");
+
+      CMD2_REDIRECT        ("scgi_dont_route", "network.scgi.dont_route.set");
       CMD2_REDIRECT_GENERIC("set_scgi_dont_route", "network.scgi.dont_route.set");
       CMD2_REDIRECT        ("get_scgi_dont_route", "network.scgi.dont_route");
 
@@ -645,6 +616,19 @@ main(int argc, char** argv) {
       CMD2_REDIRECT        ("get_session_on_completion", "session.on_completion");
       CMD2_REDIRECT_GENERIC("set_session_on_completion", "session.on_completion.set");
 
+      CMD2_REDIRECT        ("hash_read_ahead", "system.hash.read_ahead.set");
+      CMD2_REDIRECT        ("get_hash_read_ahead", "system.hash.read_ahead");
+      CMD2_REDIRECT_GENERIC("set_hash_read_ahead", "system.hash.read_ahead.set");
+
+      CMD2_REDIRECT        ("hash_interval", "system.hash.interval.set");
+      CMD2_REDIRECT        ("get_hash_interval", "system.hash.interval");
+      CMD2_REDIRECT_GENERIC("set_hash_interval", "system.hash.interval.set");
+
+      CMD2_REDIRECT        ("hash_max_tries", "system.hash.max_tries.set");
+      CMD2_REDIRECT        ("get_hash_max_tries", "system.hash.max_tries");
+      CMD2_REDIRECT_GENERIC("set_hash_max_tries", "system.hash.max_tries.set");
+
+      CMD2_REDIRECT        ("check_hash", "pieces.hash.on_completion.set");
       CMD2_REDIRECT        ("get_check_hash", "pieces.hash.on_completion");
       CMD2_REDIRECT_GENERIC("set_check_hash", "pieces.hash.on_completion.set");
 
@@ -819,6 +803,16 @@ main(int argc, char** argv) {
       // Rename these to avoid conflicts with old style.
       CMD2_REDIRECT_GENERIC("d.multicall", "d.multicall2");
 
+      CMD2_REDIRECT_GENERIC("to_gm_time", "convert.gm_time");
+      CMD2_REDIRECT_GENERIC("to_gm_date", "convert.gm_date");
+      CMD2_REDIRECT_GENERIC("to_time", "convert.time");
+      CMD2_REDIRECT_GENERIC("to_date", "convert.date");
+      CMD2_REDIRECT_GENERIC("to_elapsed_time", "convert.elapsed_time");
+      CMD2_REDIRECT_GENERIC("to_kb", "convert.kb");
+      CMD2_REDIRECT_GENERIC("to_mb", "convert.mb");
+      CMD2_REDIRECT_GENERIC("to_xb", "convert.xb");
+      CMD2_REDIRECT_GENERIC("to_throttle", "convert.throttle");
+
       CMD2_REDIRECT_GENERIC("execute_throw", "execute.throw");
       CMD2_REDIRECT_GENERIC("execute_nothrow", "execute.nothrow");
       CMD2_REDIRECT_GENERIC("execute_raw", "execute.raw");
@@ -830,21 +824,10 @@ main(int argc, char** argv) {
 
     int firstArg = parse_options(control, argc, argv);
 
-    if (OptionParser::has_flag('n', argc, argv)) {
-      lt_log_print(torrent::LOG_WARN, "Ignoring rtorrent.rc.");
-    } else {
-      char* config_dir = std::getenv("XDG_CONFIG_HOME");
-      char* home_dir = std::getenv("HOME");
-
-      if (config_dir != NULL && config_dir[0] == '/' &&
-          access((std::string(config_dir) + "/rtorrent/rtorrent.rc").c_str(), F_OK) != -1) {
-        rpc::parse_command_single(rpc::make_target(), "try_import = " + std::string(config_dir) + "/rtorrent/rtorrent.rc");
-      } else if (home_dir != NULL && access((std::string(home_dir) + "/.config/rtorrent/rtorrent.rc").c_str(), F_OK) != -1) {
-        rpc::parse_command_single(rpc::make_target(), "try_import = ~/.config/rtorrent/rtorrent.rc");
-      } else {
-        rpc::parse_command_single(rpc::make_target(), "try_import = ~/.rtorrent.rc");
-      }
-    }
+    if (OptionParser::has_flag('n', argc, argv))
+      control->core()->push_log("Ignoring ~/.rtorrent.rc.");
+    else
+      rpc::parse_command_single(rpc::make_target(), "try_import = ~/.rtorrent.rc");
 
     control->initialize();
 
@@ -864,105 +847,34 @@ main(int argc, char** argv) {
 
     worker_thread->start_thread();
 
-    torrent::thread_base::event_loop(torrent::main_thread());
+    while (!control->is_shutdown_completed()) {
+      if (control->is_shutdown_received())
+        control->handle_shutdown();
+
+      control->inc_tick();
+
+      cachedTime = rak::timer::current();
+      rak::priority_queue_perform(&taskScheduler, cachedTime);
+
+      // Do shutdown check before poll, not after.
+      main_thread->poll_manager()->poll(client_next_timeout(control));
+    }
 
     control->core()->download_list()->session_save();
     control->cleanup();
-
-  } catch (torrent::internal_error& e) {
-    control->cleanup_exception();
-
-    std::cout << "Caught internal_error: " << e.what() << std::endl
-              << e.backtrace();
-    lt_log_print_dump(torrent::LOG_CRITICAL, e.backtrace().c_str(), e.backtrace().size(),
-                      "Caught internal_error: '%s'.", e.what());
-    return -1;
 
   } catch (std::exception& e) {
     control->cleanup_exception();
 
     std::cout << "rtorrent: " << e.what() << std::endl;
-    lt_log_print(torrent::LOG_CRITICAL, "Caught exception: '%s'.", e.what());
     return -1;
   }
 
-  torrent::log_cleanup();
-
   delete control;
   delete worker_thread;
+  delete main_thread;
 
   return 0;
-}
-
-void
-handle_sigbus(int signum, siginfo_t* sa, void* ptr) {
-  if (signum != SIGBUS)
-    do_panic(signum);
-
-  SignalHandler::set_default(signum);
-  display::Canvas::cleanup();
-
-  std::stringstream output;
-  output << "Caught SIGBUS, dumping stack:" << std::endl;
-
-#ifdef USE_EXECINFO
-  void* stackPtrs[20];
-
-  // Print the stack and exit.
-  int stackSize = backtrace(stackPtrs, 20);
-  char** stackStrings = backtrace_symbols(stackPtrs, stackSize);
-
-  for (int i = 0; i < stackSize; ++i)
-    output << stackStrings[i] << std::endl;
-
-#else
-  output << "Stack dump not enabled." << std::endl;
-#endif
-  output << std::endl << "Error: " << rak::error_number(sa->si_errno).c_str() << std::endl;
-
-  const char* signal_reason;
-
-  switch (sa->si_code) {
-  case BUS_ADRALN: signal_reason = "Invalid address alignment."; break;
-  case BUS_ADRERR: signal_reason = "Non-existent physical address."; break;
-  case BUS_OBJERR: signal_reason = "Object specific hardware error."; break;
-  default:
-    if (sa->si_code <= 0)
-      signal_reason = "User-generated signal.";
-    else
-      signal_reason = "Unknown.";
-
-    break;
-  };
-
-  output << "Signal code '" << sa->si_code << "': " << signal_reason << std::endl;
-  output << "Fault address: " << sa->si_addr << std::endl;
-
-  // New code for finding the location of the SIGBUS signal, and using
-  // that to figure out how to recover.
-  torrent::chunk_info_result result = torrent::chunk_list_address_info(sa->si_addr);
-
-  if (!result.download.is_valid()) {
-    output << "The fault address is not part of any chunk." << std::endl;
-    goto handle_sigbus_exit;
-  }
-
-  output << "Torrent name: " << result.download.info()->name().c_str() << std::endl;
-  output << "File name:    " << result.file_path << std::endl;
-  output << "File offset:  " << result.file_offset << std::endl;
-  output << "Chunk index:  " << result.chunk_index << std::endl;
-  output << "Chunk offset: " << result.chunk_offset << std::endl;
-
-handle_sigbus_exit:
-  std::cout << output.rdbuf();
-
-  if (lt_log_is_valid(torrent::LOG_CRITICAL)) {
-    std::string dump = output.str();
-    lt_log_print_dump(torrent::LOG_CRITICAL, dump.c_str(), dump.size(), "Caught signal: '%s'.", signal_reason);
-  }
-
-  torrent::log_cleanup();
-  std::abort();
 }
 
 void
@@ -972,9 +884,9 @@ do_panic(int signum) {
   SignalHandler::set_default(signum);
   display::Canvas::cleanup();
 
-  std::stringstream output;
+  // Use printf here instead...
 
-  output << "Caught " << SignalHandler::as_string(signum) << ", dumping stack:" << std::endl;
+  std::cout << "Caught " << SignalHandler::as_string(signum) << ", dumping stack:" << std::endl;
   
 #ifdef USE_EXECINFO
   void* stackPtrs[20];
@@ -984,23 +896,28 @@ do_panic(int signum) {
   char** stackStrings = backtrace_symbols(stackPtrs, stackSize);
 
   for (int i = 0; i < stackSize; ++i)
-    output << stackStrings[i] << std::endl;
+    std::cout << i << ' ' << stackStrings[i] << std::endl;
 
 #else
-  output << "Stack dump not enabled." << std::endl;
+  std::cout << "Stack dump not enabled." << std::endl;
 #endif
   
+  // Dumping virtual memory map information to file:
+  // char dump_path[256];
+  // snprintf(dump_path, 256, "./rtorrent.map.%u", getpid());
+
+  // int dump_fd = open(dump_path, O_RDWR | O_CREAT);
+
+  // if (dump_fd == -1) {
+  //   printf("Could not create vmmap dump file '%s'.", dump_path);
+  //   goto do_panic_exit;
+  // }
+
+// do_panic_exit:
+
   if (signum == SIGBUS)
-    output << "A bus error probably means you ran out of diskspace." << std::endl;
+    std::cout << "A bus error probably means you ran out of diskspace." << std::endl;
 
-  std::cout << output.rdbuf();
-
-  if (lt_log_is_valid(torrent::LOG_CRITICAL)) {
-    std::string dump = output.str();
-    lt_log_print_dump(torrent::LOG_CRITICAL, dump.c_str(), dump.size(), "Caught signal: '%s.", strsignal(signum));
-  }
-
-  torrent::log_cleanup();
   std::abort();
 }
 
@@ -1012,9 +929,8 @@ print_help() {
   std::cout << "order. Use the up/down/left/right arrow keys to move between screens." << std::endl;
   std::cout << std::endl;
   std::cout << "Usage: rtorrent [OPTIONS]... [FILE]... [URL]..." << std::endl;
-  std::cout << "  -D                Enable deprecated commands" << std::endl;
   std::cout << "  -h                Display this very helpful text" << std::endl;
-  std::cout << "  -n                Don't try to load rtorrent.rc on startup" << std::endl;
+  std::cout << "  -n                Don't try to load ~/.rtorrent.rc on startup" << std::endl;
   std::cout << "  -b <a.b.c.d>      Bind the listening socket to this IP" << std::endl;
   std::cout << "  -i <a.b.c.d>      Change the IP that is sent to the tracker" << std::endl;
   std::cout << "  -p <int>-<int>    Set port range for incoming connections" << std::endl;
@@ -1027,7 +943,6 @@ print_help() {
   std::cout << "  ^s                Start torrent" << std::endl;
   std::cout << "  ^d                Stop torrent or delete a stopped torrent" << std::endl;
   std::cout << "  ^r                Manually initiate hash checking" << std::endl;
-  std::cout << "  ^o                Change the destination directory of the download. The torrent must be closed." << std::endl;
   std::cout << "  ^q                Initiate shutdown or skip shutdown process" << std::endl;
   std::cout << "  a,s,d,z,x,c       Adjust upload throttle" << std::endl;
   std::cout << "  A,S,D,Z,X,C       Adjust download throttle" << std::endl;
@@ -1045,7 +960,7 @@ print_help() {
   std::cout << "  o                 View trackers" << std::endl;
   std::cout << std::endl;
 
-  std::cout << "Report bugs to <sundell.software@gmail.com>." << std::endl;
+  std::cout << "Report bugs to <jaris@ifi.uio.no>." << std::endl;
 
   exit(0);
 }

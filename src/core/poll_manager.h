@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,15 +37,41 @@
 #ifndef RTORRENT_CORE_POLL_MANAGER_H
 #define RTORRENT_CORE_POLL_MANAGER_H
 
-#include "curl_stack.h"
+#include <rak/timer.h>
+#include <sigc++/signal.h>
+#include <torrent/poll.h>
 
-namespace torrent {
-class Poll;
-}
+#include "curl_stack.h"
 
 namespace core {
 
-torrent::Poll* create_poll();
+// CurlStack really should be somewhere else, but that won't happen
+// until they add an epoll friendly API.
+
+class PollManager {
+public:
+  typedef sigc::signal0<void> Signal;
+
+  PollManager(torrent::Poll* poll);
+  virtual ~PollManager();
+
+  unsigned int        get_open_max() const         { return m_poll->open_max(); }
+
+  torrent::Poll*      get_torrent_poll()           { return m_poll; }
+
+  virtual void        poll(rak::timer timeout) = 0;
+  virtual void        poll_simple(rak::timer timeout) = 0;
+
+  static PollManager* create_poll_manager();
+
+protected:
+  PollManager(const PollManager&);
+  void operator = (const PollManager&);
+
+  void                check_error();
+
+  torrent::Poll*      m_poll;
+};
 
 }
 

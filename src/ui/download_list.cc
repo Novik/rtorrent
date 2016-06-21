@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,9 +38,10 @@
 
 #include <rak/functional.h>
 #include <rak/string_manip.h>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
 #include <torrent/exceptions.h>
 #include <torrent/torrent.h>
-#include <torrent/utils/log.h>
 
 #include "core/download.h"
 #include "core/download_list.h"
@@ -72,10 +73,10 @@ DownloadList::DownloadList() :
 
   m_uiArray[DISPLAY_DOWNLOAD]      = NULL;
   m_uiArray[DISPLAY_DOWNLOAD_LIST] = new ElementDownloadList();
-  m_uiArray[DISPLAY_LOG]           = new ElementLogComplete(control->core()->log_complete());
+  m_uiArray[DISPLAY_LOG]           = new ElementLogComplete(&control->core()->get_log_complete());
   m_uiArray[DISPLAY_STRING_LIST]   = new ElementStringList();
 
-  m_windowLog                      = new WLog(control->core()->log_important());
+  m_windowLog                      = new WLog(&control->core()->get_log_important());
 
   setup_keys();
 }
@@ -191,7 +192,7 @@ DownloadList::activate_display(Display displayType) {
       Download* download = new Download(*current_view()->focus());
 
       download->activate(m_frame);
-      download->slot_exit(std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST));
+      download->slot_exit(sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_DOWNLOAD_LIST));
     
       m_uiArray[DISPLAY_DOWNLOAD] = download;
       break;
@@ -268,18 +269,15 @@ DownloadList::receive_view_input(Input type) {
 
   ElementStringList* esl = dynamic_cast<ElementStringList*>(m_uiArray[DISPLAY_STRING_LIST]);
 
-  input->signal_show_next().push_back(std::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
-  input->signal_show_next().push_back(std::bind(&ElementStringList::next_screen, esl));
+  input->signal_show_next().connect(sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_STRING_LIST));
+  input->signal_show_next().connect(sigc::mem_fun(*esl, &ElementStringList::next_screen));
 
-  input->signal_show_range().push_back(std::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
-  input->signal_show_range().push_back(std::bind(&ElementStringList::set_range_dirent<utils::Directory::iterator>,
-                                                      esl,
-                                                      std::placeholders::_1,
-                                                      std::placeholders::_2));
+  input->signal_show_range().connect(sigc::hide(sigc::hide(sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_STRING_LIST))));
+  input->signal_show_range().connect(sigc::mem_fun(*esl, &ElementStringList::set_range_dirent<utils::Directory::iterator>));
 
-  input->bindings()['\n']      = std::bind(&DownloadList::receive_exit_input, this, type);
-  input->bindings()[KEY_ENTER] = std::bind(&DownloadList::receive_exit_input, this, type);
-  input->bindings()['\x07']    = std::bind(&DownloadList::receive_exit_input, this, INPUT_NONE);
+  input->bindings()['\n']      = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_exit_input), type);
+  input->bindings()[KEY_ENTER] = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_exit_input), type);
+  input->bindings()['\x07']    = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_exit_input), INPUT_NONE);
 
   control->ui()->enable_input(title, input);
 }
@@ -330,7 +328,7 @@ DownloadList::receive_exit_input(Input type) {
     }
 
   } catch (torrent::input_error& e) {
-    lt_log_print(torrent::LOG_WARN, "Input failed: %s", e.what());
+    control->core()->push_log(e.what());
   }
 
   activate_display(DISPLAY_DOWNLOAD_LIST);
@@ -340,20 +338,20 @@ DownloadList::receive_exit_input(Input type) {
 
 void
 DownloadList::setup_keys() {
-  m_bindings['\x7f']        = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
-  m_bindings[KEY_BACKSPACE] = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
-  m_bindings['\n']          = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
-  m_bindings[KEY_ENTER]     = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
-  m_bindings['\x0F']        = std::bind(&DownloadList::receive_view_input, this, INPUT_CHANGE_DIRECTORY);
-  m_bindings['X' - '@']     = std::bind(&DownloadList::receive_view_input, this, INPUT_COMMAND);
+  m_bindings['\x7f']        = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_LOAD_DEFAULT);
+  m_bindings[KEY_BACKSPACE] = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_LOAD_DEFAULT);
+  m_bindings['\n']          = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_LOAD_MODIFIED);
+  m_bindings[KEY_ENTER]     = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_LOAD_MODIFIED);
+  m_bindings['\x0F']        = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_CHANGE_DIRECTORY);
+  m_bindings['X' - '@']     = sigc::bind(sigc::mem_fun(*this, &DownloadList::receive_view_input), INPUT_COMMAND);
 
   m_uiArray[DISPLAY_LOG]->bindings()[KEY_LEFT] =
     m_uiArray[DISPLAY_LOG]->bindings()['B' - '@'] =
-    m_uiArray[DISPLAY_LOG]->bindings()[' '] = std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST);
+    m_uiArray[DISPLAY_LOG]->bindings()[' '] = sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_DOWNLOAD_LIST);
 
   m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()[KEY_RIGHT] =
-    m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['F' - '@'] = std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD);
-  m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['l'] = std::bind(&DownloadList::activate_display, this, DISPLAY_LOG);
+    m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['F' - '@'] = sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_DOWNLOAD);
+  m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['l']       = sigc::bind(sigc::mem_fun(*this, &DownloadList::activate_display), DISPLAY_LOG);
 }
 
 }

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -40,12 +40,12 @@
 #include <iosfwd>
 #include <vector>
 
-#include <torrent/utils/log_buffer.h>
 #include <torrent/connection_manager.h>
 
 #include "download_list.h"
 #include "poll_manager.h"
 #include "range_map.h"
+#include "log.h"
 
 namespace torrent {
   class Bencode;
@@ -69,8 +69,8 @@ public:
   typedef DownloadList::iterator                    DListItr;
   typedef utils::FileStatusCache                    FileStatusCache;
 
-  // typedef std::function<void (DownloadList::iterator)> slot_ready;
-  // typedef std::function<void ()>                       slot_void;
+  typedef sigc::slot1<void, DownloadList::iterator> SlotReady;
+  typedef sigc::slot0<void>                         SlotFailed;
 
   Manager();
   ~Manager();
@@ -85,8 +85,8 @@ public:
   View*               hashing_view()                      { return m_hashingView; }
   void                set_hashing_view(View* v);
 
-  torrent::log_buffer* log_important()                    { return m_log_important; }
-  torrent::log_buffer* log_complete()                     { return m_log_complete; }
+  Log&                get_log_important()                 { return m_logImportant; }
+  Log&                get_log_complete()                  { return m_logComplete; }
 
   ThrottleMap&          throttles()                       { return m_throttles; }
   torrent::ThrottlePair get_throttle(const std::string& name);
@@ -113,8 +113,8 @@ public:
   void                shutdown(bool force);
 
   void                push_log(const char* msg);
-  void                push_log_std(const std::string& msg) { m_log_important->lock_and_push_log(msg.c_str(), msg.size(), 0); m_log_complete->lock_and_push_log(msg.c_str(), msg.size(), 0); }
-  void                push_log_complete(const std::string& msg) { m_log_complete->lock_and_push_log(msg.c_str(), msg.size(), 0); }
+  void                push_log_std(const std::string& msg) { m_logImportant.push_front(msg); m_logComplete.push_front(msg); }
+  void                push_log_complete(const std::string& msg) { m_logComplete.push_front(msg); }
 
   void                handshake_log(const sockaddr* sa, int msg, int err, const torrent::HashString* hash);
 
@@ -152,8 +152,8 @@ private:
   ThrottleMap         m_throttles;
   AddressThrottleMap  m_addressThrottles;
 
-  torrent::log_buffer* m_log_important;
-  torrent::log_buffer* m_log_complete;
+  Log                 m_logImportant;
+  Log                 m_logComplete;
 };
 
 // Meh, cleanup.

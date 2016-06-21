@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -41,12 +41,16 @@
 #include <limits>
 #include <inttypes.h>
 #include <torrent/object.h>
-#include lt_tr1_functional
+#include <tr1/functional>
 
 #include <torrent/object.h>
 #include <torrent/data/file_list_iterator.h>
 
 // Move into config.h or something.
+namespace std {
+  using namespace tr1;
+}
+
 namespace core {
   class Download;
 }
@@ -82,8 +86,8 @@ struct rt_triple : private std::pair<T1, T2> {
 
   using base_type::first;
   using base_type::second;
-  using typename base_type::first_type;
-  using typename base_type::second_type;
+  using base_type::first_type;
+  using base_type::second_type;
 
   T3 third;
 
@@ -206,16 +210,9 @@ protected:
   // within commands. E.d. callable command strings where one of the
   // arguments within the command needs to be supplied by the caller.
 
-#ifdef HAVE_CXX11
-  union {
-    base_function t_pod;
-    // char t_pod[sizeof(base_function)];
-  };
-#else
   union {
     char t_pod[sizeof(base_function)];
   };
-#endif
 };
 
 template <typename T1 = void, typename T2 = void>

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,7 +38,6 @@
 
 #include <algorithm>
 #include <functional>
-#include lt_tr1_functional
 #include <rak/algorithm.h>
 #include <torrent/exceptions.h>
 
@@ -333,9 +332,6 @@ Frame::balance_window(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
   m_window->mark_dirty();
 }
 
-inline Frame::extent_type dynamic_min_height(const Frame::dynamic_type& value) { return value.second.min_height(); }
-inline Frame::extent_type dynamic_min_width(const Frame::dynamic_type& value) { return value.second.min_width(); }
-
 inline void
 Frame::balance_row(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
   // Find the size of the static frames. The dynamic frames are added
@@ -359,17 +355,16 @@ Frame::balance_row(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
       remaining -= bounds.minHeight;
     }
   }
-
+  
   // Sort the dynamic frames by the min size in the direction we are
   // interested in. Then try to satisfy the largest first, and if we
   // have any remaining space we can use that to extend it and any
   // following frames.
   //
   // Else if we're short, only give each what they require.
-  std::stable_sort(dynamicFrames, dynamicFrames + dynamicSize,
-                   std::bind(std::greater<extent_type>(),
-                                  std::bind(&dynamic_min_height, std::placeholders::_1),
-                                  std::bind(&dynamic_min_height, std::placeholders::_2)));
+  std::sort(dynamicFrames, dynamicFrames + dynamicSize,
+            rak::greater2(rak::on(rak::const_mem_ref(&dynamic_type::second), rak::const_mem_ref(&Frame::bounds_type::minHeight)),
+                          rak::on(rak::const_mem_ref(&dynamic_type::second), rak::const_mem_ref(&Frame::bounds_type::minHeight))));
 
   bool retry;
 
@@ -441,10 +436,9 @@ Frame::balance_column(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
   // following frames.
   //
   // Else if we're short, only give each what they require.
-  std::stable_sort(dynamicFrames, dynamicFrames + dynamicSize,
-                   std::bind(std::greater<extent_type>(),
-                                  std::bind(&dynamic_min_width, std::placeholders::_1),
-                                  std::bind(&dynamic_min_width, std::placeholders::_2)));
+  std::sort(dynamicFrames, dynamicFrames + dynamicSize,
+            rak::greater2(rak::on(rak::const_mem_ref(&dynamic_type::second), rak::const_mem_ref(&Frame::bounds_type::minWidth)),
+                          rak::on(rak::const_mem_ref(&dynamic_type::second), rak::const_mem_ref(&Frame::bounds_type::minWidth))));
 
   bool retry;
 

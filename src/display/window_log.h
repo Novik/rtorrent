@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,7 +37,9 @@
 #ifndef RTORRENT_DISPLAY_WINDOW_LOG_H
 #define RTORRENT_DISPLAY_WINDOW_LOG_H
 
-#include <torrent/utils/log_buffer.h>
+#include <sigc++/connection.h>
+
+#include "core/log.h"
 
 #include "window.h"
 
@@ -45,9 +47,9 @@ namespace display {
 
 class WindowLog : public Window {
 public:
-  typedef torrent::log_buffer::const_iterator iterator;
+  typedef core::Log::iterator iterator;
 
-  WindowLog(torrent::log_buffer* l);
+  WindowLog(core::Log* l);
   ~WindowLog();
 
   virtual void        redraw();
@@ -57,8 +59,10 @@ public:
 private:
   inline iterator     find_older();
 
-  torrent::log_buffer* m_log;
-  rak::priority_item   m_taskUpdate;
+  core::Log*          m_log;
+  sigc::connection    m_connUpdate;
+
+  rak::priority_item  m_taskUpdate;
 };
 
 }

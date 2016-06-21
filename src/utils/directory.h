@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ struct directory_entry {
 
   // The name and types should match POSIX.
   uint32_t            d_fileno;
-  uint32_t            d_reclen; //Not used. Messes with Solaris.
+  uint32_t            d_reclen;
   uint8_t             d_type;
 
   std::string         d_name;

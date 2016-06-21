@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,18 +37,23 @@
 #ifndef RTORRENT_DISPLAY_WINDOW_DOWNLOAD_LIST_H
 #define RTORRENT_DISPLAY_WINDOW_DOWNLOAD_LIST_H
 
+#include <sigc++/connection.h>
+
 #include "window.h"
 
 #include "core/download_list.h"
-#include "core/view.h"
+
+namespace core {
+  class View;
+}
 
 namespace display {
 
 class WindowDownloadList : public Window {
 public:
-  typedef core::View::signal_void::iterator signal_void_itr;
-
-  WindowDownloadList();
+  WindowDownloadList() :
+    Window(new Canvas, 0, 120, 1, extent_full, extent_full),
+    m_view(NULL) {}
   ~WindowDownloadList();
 
   virtual void        redraw();
@@ -58,7 +63,7 @@ public:
 private:
   core::View*         m_view;
 
-  signal_void_itr     m_changed_itr;
+  sigc::connection    m_connChanged;
 };
 
 }

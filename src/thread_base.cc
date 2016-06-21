@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,11 +43,8 @@
 #include <cstring>
 #include <iostream>
 #include <signal.h>
-#include <unistd.h>
 #include <rak/error_number.h>
 #include <torrent/exceptions.h>
-#include <torrent/torrent.h>
-#include <torrent/utils/log.h>
 
 #include "globals.h"
 #include "control.h"
@@ -83,7 +80,7 @@ public:
       throw torrent::internal_error("Overflowed thread_queue.");
 
     __sync_bool_compare_and_swap(itr, NULL, v);
-    unlock();
+    __sync_bool_compare_and_swap(&m_lock, 1, 0);
   }
 
   value_type* copy_and_clear(value_type* dest) {
@@ -108,31 +105,79 @@ public:
 
 void throw_shutdown_exception() { throw torrent::shutdown_exception(); }
 
-ThreadBase::ThreadBase() {
-  m_taskShutdown.slot() = std::bind(&throw_shutdown_exception);
+ThreadBase::ThreadBase() :
+  m_state(STATE_UNKNOWN),
+  m_pollManager(NULL) {
+  // Init the poll manager in a special init function called by the
+  // thread itself. Need to be careful with what external stuff
+  // create_poll_manager calls in that case.
+  std::memset(&m_thread, 0, sizeof(pthread_t));
+
+  m_taskShutdown.set_slot(rak::ptr_fn(&throw_shutdown_exception));
 
   m_threadQueue = new thread_queue_hack;
 }
 
 ThreadBase::~ThreadBase() {
+  delete m_pollManager;
   delete m_threadQueue;
 }
 
-// Move to libtorrent...
+void
+ThreadBase::start_thread() {
+  if (m_state != STATE_INITIALIZED ||
+      pthread_create(&m_thread, NULL, (pthread_func)&ThreadBase::event_loop, this))
+    throw torrent::internal_error("Failed to create thread.");
+}
+
 void
 ThreadBase::stop_thread(ThreadBase* thread) {
   if (!thread->m_taskShutdown.is_queued())
     priority_queue_insert(&thread->m_taskScheduler, &thread->m_taskShutdown, cachedTime);
 }
 
-int64_t
-ThreadBase::next_timeout_usec() {
+inline rak::timer
+ThreadBase::client_next_timeout() {
   if (m_taskScheduler.empty())
-    return rak::timer::from_seconds(600).usec();
+    return rak::timer::from_seconds(600);
   else if (m_taskScheduler.top()->time() <= cachedTime)
     return 0;
   else
-    return (m_taskScheduler.top()->time() - cachedTime).usec();
+    return m_taskScheduler.top()->time() - cachedTime;
+}
+
+void*
+ThreadBase::event_loop(ThreadBase* threadBase) {
+  // Setup stuff...
+  threadBase->m_state = STATE_ACTIVE;
+
+  // Set local poll and priority queue.
+  
+  try {
+
+    while (true) {
+      // Check for new queued items set by other threads.
+      if (!threadBase->m_threadQueue->empty())
+        threadBase->call_queued_items();
+
+      //     // Remember to add global lock thing to the main poll loop ++.
+
+      rak::priority_queue_perform(&threadBase->m_taskScheduler, cachedTime);
+
+      threadBase->m_pollManager->poll_simple(threadBase->client_next_timeout());
+    }
+
+  } catch (torrent::shutdown_exception& e) {
+    acquire_global_lock();
+    control->core()->push_log("Shutting down thread.");
+    release_global_lock();
+    //    sleep(20);
+  }
+
+  threadBase->m_state = STATE_INACTIVE;
+  __sync_synchronize();
+
+  return NULL;
 }
 
 void
@@ -146,19 +191,20 @@ ThreadBase::call_queued_items() {
 }
 
 void
-ThreadBase::call_events() {
-  // Check for new queued items set by other threads.
-  if (!m_threadQueue->empty())
-    call_queued_items();
-
-  rak::priority_queue_perform(&m_taskScheduler, cachedTime);
-}
-
-void
 ThreadBase::queue_item(thread_base_func newFunc) {
   m_threadQueue->push_back(newFunc);
 
   // Make it also restart inactive threads?
   if (m_state == STATE_ACTIVE)
-    interrupt();
+    pthread_kill(m_thread, SIGUSR1);
+}
+
+void
+ThreadBase::interrupt_main_polling() {
+  do {
+    if (!ThreadBase::is_main_polling())
+      return;
+    
+    pthread_kill(main_thread->m_thread, SIGUSR1);
+  } while (1);
 }

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,7 +42,6 @@
 #include <torrent/dht_manager.h>
 #include <torrent/object_stream.h>
 #include <torrent/rate.h>
-#include <torrent/utils/log.h>
 
 #include "rpc/parse_commands.h"
 
@@ -77,7 +76,7 @@ DhtManager::load_dht_cache() {
     // If the cache file is corrupted we will just discard it with an
     // error message.
     if (cache_file.fail()) {
-      lt_log_print(torrent::LOG_DHT_WARN, "DHT cache file corrupted, discarding.");
+      control->core()->push_log("DHT warning: Cache file corrupted, discarding.");
       cache = torrent::Object::create_map();
     }
   }
@@ -89,7 +88,7 @@ DhtManager::load_dht_cache() {
       start_dht();
 
   } catch (torrent::local_error& e) {
-    lt_log_print(torrent::LOG_DHT_WARN, "DHT failed: %s", e.what());
+   control->core()->push_log((std::string("DHT error: ") + e.what()).c_str());
   }
 }
 
@@ -108,13 +107,15 @@ DhtManager::start_dht() {
   if (port <= 0)
     return;
 
-  lt_log_print(torrent::LOG_DHT_INFO, "Starting DHT server on port %d.", port);
+  char msg[128];
+  snprintf(msg, sizeof(msg), "Starting DHT server on port %d.", port);
+  control->core()->push_log(msg);
 
   try {
     torrent::dht_manager()->start(port);
     torrent::dht_manager()->reset_statistics();
 
-    m_updateTimeout.slot() = std::bind(&DhtManager::update, this);
+    m_updateTimeout.set_slot(rak::mem_fn(this, &DhtManager::update));
     priority_queue_insert(&taskScheduler, &m_updateTimeout, (cachedTime + rak::timer::from_seconds(60)).round_seconds());
 
     m_dhtPrevCycle = 0;
@@ -125,7 +126,7 @@ DhtManager::start_dht() {
     m_dhtPrevBytesDown = 0;
 
   } catch (torrent::local_error& e) {
-    lt_log_print(torrent::LOG_DHT_ERROR, "DHT start failed: %s", e.what());
+    control->core()->push_log((std::string("DHT error: ") + e.what()).c_str());
     m_start = dht_off;
   }
 }
@@ -137,7 +138,7 @@ DhtManager::stop_dht() {
 
   if (torrent::dht_manager()->is_active()) {
     log_statistics(true);
-    lt_log_print(torrent::LOG_DHT_INFO, "Stopping DHT server.");
+    control->core()->push_log("Stopping DHT server.");
     torrent::dht_manager()->stop();
   }
 }
@@ -197,7 +198,7 @@ DhtManager::update() {
         break;
       
     if (itr == end) {
-      m_stopTimeout.slot() = std::bind(&DhtManager::stop_dht, this);
+      m_stopTimeout.set_slot(rak::mem_fn(this, &DhtManager::stop_dht));
       priority_queue_insert(&taskScheduler, &m_stopTimeout, (cachedTime + rak::timer::from_seconds(15 * 60)).round_seconds());
     }
   }
@@ -219,7 +220,7 @@ DhtManager::log_statistics(bool force) {
     // We should have had clients ping us at least but have received
     // nothing, that means the UDP port is probably unreachable.
     if (torrent::dht_manager()->can_receive_queries())
-      lt_log_print(torrent::LOG_DHT_WARN, "DHT port appears to be unreachable, no queries received.");
+      control->core()->push_log("Warning: DHT port appears to be unreachable, no queries received.");
 
     torrent::dht_manager()->set_can_receive(false);
   }
@@ -227,7 +228,7 @@ DhtManager::log_statistics(bool force) {
   if (stats.queries_sent - m_dhtPrevQueriesSent > stats.num_nodes * 2 + 20 && stats.replies_received == m_dhtPrevRepliesReceived) {
     // No replies to over 20 queries plus two per node we have. Probably firewalled.
     if (!m_warned)
-      lt_log_print(torrent::LOG_DHT_WARN, "DHT port appears to be firewalled, no replies received.");
+      control->core()->push_log("Warning: DHT port appears to be firewalled, no replies received.");
 
     m_warned = true;
     return false;
@@ -248,7 +249,7 @@ DhtManager::log_statistics(bool force) {
   if (m_dhtPrevCycle == 1) {
     char buffer[128];
     snprintf(buffer, sizeof(buffer), "DHT bootstrap complete, have %d nodes in %d buckets.", stats.num_nodes, stats.num_buckets);
-    control->core()->push_log_complete(buffer);
+    control->core()->get_log_complete().push_front(buffer);
     m_dhtPrevCycle = stats.cycle;
     return false;
   };
@@ -263,15 +264,15 @@ DhtManager::log_statistics(bool force) {
              stats.queries_received - m_dhtPrevQueriesReceived,
              stats.queries_sent - m_dhtPrevQueriesSent,
              stats.replies_received - m_dhtPrevRepliesReceived,
-             (long long unsigned int)(stats.down_rate.total() - m_dhtPrevBytesDown),
-             (long long unsigned int)(stats.up_rate.total() - m_dhtPrevBytesUp),
+             stats.down_rate.total() - m_dhtPrevBytesDown,
+             stats.up_rate.total() - m_dhtPrevBytesUp,
              stats.num_nodes,
              stats.num_buckets,
              stats.num_peers,
              stats.max_peers,
              stats.num_trackers);
 
-    control->core()->push_log_complete(buffer);
+    control->core()->get_log_complete().push_front(buffer);
 
     m_dhtPrevCycle = stats.cycle;
     m_dhtPrevQueriesSent = stats.queries_sent;

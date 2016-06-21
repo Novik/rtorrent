@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -195,15 +195,13 @@ print_download_status(char* first, char* last, core::Download* d) {
     first = print_buffer(first, last, "Checking hash [%2i%%]",
                          (d->download()->chunks_hashed() * 100) / d->download()->file_list()->size_chunks());
 
-  } else if (d->tracker_list()->has_active_not_scrape()) {
-    torrent::TrackerList::iterator itr =
-      std::find_if(d->tracker_list()->begin(), d->tracker_list()->end(),
-                   std::mem_fun(&torrent::Tracker::is_busy_not_scrape));
+  } else if (d->tracker_list()->has_active() && d->tracker_list()->focus() < d->tracker_list()->end()) {
+    torrent::TrackerList* tl = d->tracker_list();
     char status[128];
 
-    (*itr)->get_status(status, sizeof(status));
+    (*tl->focus())->get_status(status, sizeof(status));
     first = print_buffer(first, last, "Tracker[%i:%i]: Connecting to %s %s",
-                         (*itr)->group(), std::distance(d->tracker_list()->begin(), itr), (*itr)->url().c_str(), status);
+                         (*tl->focus())->group(), tl->focus_index(), (*tl->focus())->url().c_str(), status);
 
   } else if (!d->message().empty()) {
     first = print_buffer(first, last, "%s", d->message().c_str());

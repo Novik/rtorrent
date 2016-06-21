@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -71,7 +71,7 @@ CommandScheduler::insert(const std::string& key) {
     delete *itr;
 
   *itr = new CommandSchedulerItem(key);
-  (*itr)->slot() = std::bind(&CommandScheduler::call_item, this, *itr);
+  (*itr)->set_slot(rak::bind_mem_fn(this, &CommandScheduler::call_item, *itr));
 
   return itr;
 }
@@ -97,7 +97,24 @@ CommandScheduler::call_item(value_type item) {
   // removed.
 
   try {
-    rpc::call_object(item->command());
+    if (item->command().is_string()) {
+      rpc::parse_command_multiple_std(item->command().as_string());
+
+    } else if (item->command().is_dict_key()) {
+      // This can/should be optimized...
+      torrent::Object tmp_command = item->command();
+
+      // Unquote the root function object so 'parse_command_execute'
+      // doesn't end up calling it.
+      //
+      // TODO: Only call this if mask_function is set?
+      uint32_t flags = tmp_command.flags() & torrent::Object::mask_function;
+      tmp_command.unset_flags(torrent::Object::mask_function);
+      tmp_command.set_flags((flags >> 1) & torrent::Object::mask_function);
+
+      rpc::parse_command_execute(rpc::make_target(), &tmp_command);
+      rpc::commands.call_command(tmp_command.as_dict_key().c_str(), tmp_command.as_dict_obj());
+    }
 
   } catch (torrent::input_error& e) {
     if (m_slotErrorMessage.is_valid())

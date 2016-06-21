@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@
 #define RTORRENT_RPC_OBJECT_STORAGE_H
 
 #include <cstring>
-#include lt_tr1_unordered_map
+#include <tr1/unordered_map>
 #include <torrent/object.h>
 
 #include "rak/unordered_vector.h"
@@ -108,8 +108,6 @@ public:
   static const size_t key_size = key_type::max_size;
 
   local_iterator find_local(const torrent::raw_string& key);
-  local_iterator find_local_const(const torrent::raw_string& key, unsigned int type = 0);
-  local_iterator find_local_mutable(const torrent::raw_string& key, unsigned int type = 0);
 
   iterator insert(const char* key_data, uint32_t key_size, const torrent::Object& object, unsigned int flags);
   iterator insert_c_str(const char* key, const torrent::Object& object, unsigned int flags) { return insert(key, std::strlen(key), object, flags); }
@@ -117,12 +115,6 @@ public:
   iterator insert(const char* key, const torrent::Object& object, unsigned int flags);
   iterator insert(const torrent::raw_string& key, const torrent::Object& object, unsigned int flags);
   iterator insert_str(const std::string& key, const torrent::Object& object, unsigned int flags);
-
-  bool     has_flag(const torrent::raw_string& key, unsigned int flag);
-  bool     has_flag_str(const std::string& key, unsigned int flag) { return has_flag(torrent::raw_string::from_string(key), flag); }
-
-  void     enable_flag(const torrent::raw_string& key, unsigned int flag);
-  void     enable_flag_str(const std::string& key, unsigned int flag) { enable_flag(torrent::raw_string::from_string(key), flag); }
 
   // Access functions that throw on error.
 
@@ -145,9 +137,6 @@ public:
   const torrent::Object& set_list(const torrent::raw_string& key, const torrent::Object::list_type& object);
   const torrent::Object& set_c_str_list(const char* str, const torrent::Object::list_type& object) { return set_list(torrent::raw_string::from_c_str(str), object); }
   const torrent::Object& set_str_list(const std::string& str, const torrent::Object::list_type& object) { return set_list(torrent::raw_string::from_string(str), object); }
-
-  void                   list_push_back(const torrent::raw_string& key, const torrent::Object& object);
-  void                   list_push_back_str(const std::string& str, const torrent::Object& object) { list_push_back(torrent::raw_string::from_string(str), object); }
 
   // Functions callers:
   torrent::Object        call_function(const torrent::raw_string& key, target_type target, const torrent::Object& object);

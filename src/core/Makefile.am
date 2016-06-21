@@ -20,14 +20,22 @@ libsub_core_a_SOURCES = \
 	download_store.h \
 	http_queue.cc \
 	http_queue.h \
+	log.cc \
+	log.h \
 	manager.cc \
 	manager.h \
 	poll_manager.cc \
 	poll_manager.h \
+	poll_manager_epoll.cc \
+	poll_manager_epoll.h \
+	poll_manager_kqueue.cc \
+	poll_manager_kqueue.h \
+	poll_manager_select.cc \
+	poll_manager_select.h \
 	range_map.h \
 	view.cc \
 	view.h \
 	view_manager.cc \
 	view_manager.h
 
-AM_CPPFLAGS = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)

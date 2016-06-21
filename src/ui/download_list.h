@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,9 +37,12 @@
 #ifndef RTORRENT_UI_DOWNLOAD_LIST_H
 #define RTORRENT_UI_DOWNLOAD_LIST_H
 
+#include <sigc++/functors/slot.h>
+
+#include "display/manager.h"
+
 #include "element_base.h"
 #include "globals.h"
-#include "display/manager.h"
 
 class Control;
 
@@ -71,7 +74,7 @@ public:
   typedef display::WindowLog                       WLog;
   typedef display::WindowLogComplete               WLogComplete;
 
-  typedef std::function<void (const std::string&)> slot_string;
+  typedef sigc::slot1<void, const std::string&>    SlotOpenUri;
 
   typedef enum {
     DISPLAY_DOWNLOAD,
@@ -100,7 +103,7 @@ public:
   core::View*         current_view();
   void                set_current_view(const std::string& name);
 
-  void                slot_open_uri(slot_string s) { m_slot_open_uri = s; }
+  void                slot_open_uri(SlotOpenUri s) { m_slotOpenUri = s; }
 
   void                unfocus_download(core::Download* d);
 
@@ -119,7 +122,7 @@ private:
   ElementBase*        m_uiArray[DISPLAY_MAX_SIZE];
   WLog*               m_windowLog;
 
-  slot_string         m_slot_open_uri;
+  SlotOpenUri         m_slotOpenUri;
 };
 
 }

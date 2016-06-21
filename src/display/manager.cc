@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ namespace display {
 Manager::Manager() :
   m_forceRedraw(false) {
 
-  m_taskUpdate.slot() = std::bind(&Manager::receive_update, this);
+  m_taskUpdate.set_slot(rak::mem_fn(this, &Manager::receive_update));
 }
 
 Manager::~Manager() {

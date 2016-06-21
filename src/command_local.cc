@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@
 #include <torrent/chunk_manager.h>
 #include <torrent/data/file_manager.h>
 #include <torrent/data/chunk_utils.h>
-#include <torrent/utils/option_strings.h>
+#include <torrent/utils/log_files.h>
 
 #include "core/download.h"
 #include "core/download_list.h"
@@ -79,12 +79,60 @@ apply_pieces_stats_total_size() {
 }
 
 torrent::Object
-system_env(const torrent::Object::string_type& arg) {
-  if (arg.empty())
-    throw torrent::input_error("system.env: Missing variable name.");
+apply_log(const torrent::Object::string_type& arg, int logType) {
+  if (rpc::execFile.log_fd() != -1) {
+    switch (logType) {
+    case 0: ::close(rpc::execFile.log_fd()); rpc::execFile.set_log_fd(-1); break;
+    case 1:
+//       if (control->scgi()) {
+//         ::close(control->scgi()->log_fd());
+//         control->scgi()->set_log_fd(-1);
+//       }
+      break;
+    default: break;
+    }
+  }
 
-  char* val = getenv(arg.c_str());
-  return std::string(val ? val : "");
+  if (arg.empty()) {
+    int logFd = open(rak::path_expand(arg).c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
+
+    if (logFd < 0)
+      throw torrent::input_error("Could not open execute log file.");
+
+    switch (logType) {
+    case 0: rpc::execFile.set_log_fd(logFd); break;
+//     case 1: if (control->scgi()) control->scgi()->set_log_fd(logFd); break;
+    default: break;
+    }
+
+    control->core()->push_log("Opened log file.");
+
+  } else {
+    control->core()->push_log("Closed log file.");
+  }
+
+  return torrent::Object();
+}
+
+torrent::Object
+apply_log_libtorrent(const torrent::Object::list_type& args) {
+  if (args.empty() || args.size() > 2)
+    throw torrent::input_error("Invalid argument count.");
+  
+  torrent::log_file* log_file = torrent::find_log_file(args.front().as_string().c_str());
+
+  if (log_file == NULL)
+    throw torrent::input_error("Invalid log name.");
+
+  if (args.size() == 1) {
+    log_file->close();
+    return torrent::Object();
+  }
+  
+  if (!log_file->open_file(args.back().as_string().c_str()))
+    throw torrent::input_error("Could not open log file.");
+
+  return torrent::Object();
 }
 
 torrent::Object
@@ -184,6 +232,27 @@ group_insert(const torrent::Object::list_type& args) {
   return name;
 }
 
+torrent::Object
+log_vmmap_dump(const std::string& str) {
+  core::DownloadList* d_list = control->core()->download_list();
+  std::vector<torrent::vm_mapping> all_mappings;
+
+  for (core::DownloadList::iterator itr = d_list->begin(), last = d_list->end(); itr != last; itr++) {
+    std::vector<torrent::vm_mapping> tmp_mappings = torrent::chunk_list_mapping((*itr)->download());
+
+    all_mappings.insert(all_mappings.end(), tmp_mappings.begin(), tmp_mappings.end());    
+  }
+
+  FILE* log_file = fopen(str.c_str(), "w");
+
+  for (std::vector<torrent::vm_mapping>::iterator itr = all_mappings.begin(), last = all_mappings.end(); itr != last; itr++) {
+    fprintf(log_file, "%8p-%8p [%5llxk]\n", itr->ptr, (char*)itr->ptr + itr->length, itr->length / 1024);
+  }
+
+  fclose(log_file);
+  return torrent::Object();
+}
+
 static const int file_print_use_space = 0x1;
 static const int file_print_delim_space = 0x2;
 
@@ -192,10 +261,10 @@ file_print_list(torrent::Object::list_const_iterator first, torrent::Object::lis
   while (first != last) {
     switch (first->type()) {
     case torrent::Object::TYPE_STRING:
-      fprintf(output, (const char*)" %s" + !(flags & file_print_use_space), first->as_string().c_str());
+      fprintf(output, " %s" + !(flags & file_print_use_space), first->as_string().c_str());
       break;
     case torrent::Object::TYPE_VALUE:
-      fprintf(output, (const char*)" %lli" + !(flags & file_print_use_space), first->as_value());
+      fprintf(output, " %lli" + !(flags & file_print_use_space), first->as_value());
       break;
     case torrent::Object::TYPE_LIST:
       file_print_list(first->as_list().begin(), first->as_list().end(), output, 0);
@@ -238,16 +307,15 @@ initialize_command_local() {
   CMD2_ANY         ("system.hostname", std::bind(&system_hostname));
   CMD2_ANY         ("system.pid",      std::bind(&getpid));
 
-  CMD2_VAR_C_STRING("system.api_version",           (int64_t)API_VERSION);
   CMD2_VAR_C_STRING("system.client_version",        PACKAGE_VERSION);
   CMD2_VAR_C_STRING("system.library_version",       torrent::version());
   CMD2_VAR_VALUE   ("system.file.allocate",         0);
-  CMD2_VAR_VALUE   ("system.file.max_size",         (int64_t)128 << 30);
+  CMD2_VAR_VALUE   ("system.file.max_size",         (int64_t)64 << 30);
   CMD2_VAR_VALUE   ("system.file.split_size",       -1);
   CMD2_VAR_STRING  ("system.file.split_suffix",     ".part");
 
   CMD2_ANY         ("system.file_status_cache.size",   std::bind(&utils::FileStatusCache::size,
-                                                                 (utils::FileStatusCache::base_type*)control->core()->file_status_cache()));
+                                                                      (utils::FileStatusCache::base_type*)control->core()->file_status_cache()));
   CMD2_ANY_V       ("system.file_status_cache.prune",  std::bind(&utils::FileStatusCache::prune, control->core()->file_status_cache()));
 
   CMD2_VAR_BOOL    ("file.prioritize_toc",          0);
@@ -257,8 +325,6 @@ initialize_command_local() {
   CMD2_ANY         ("system.files.opened_counter",     std::bind(&FM_t::files_opened_counter, fileManager));
   CMD2_ANY         ("system.files.closed_counter",     std::bind(&FM_t::files_closed_counter, fileManager));
   CMD2_ANY         ("system.files.failed_counter",     std::bind(&FM_t::files_failed_counter, fileManager));
-
-  CMD2_ANY_STRING  ("system.env",                      std::bind(&system_env, std::placeholders::_2));
 
   CMD2_ANY         ("system.time",                     std::bind(&rak::timer::seconds, &cachedTime));
   CMD2_ANY         ("system.time_seconds",             std::bind(&rak::timer::current_seconds));
@@ -323,6 +389,11 @@ initialize_command_local() {
   CMD2_EXECUTE     ("execute.raw_nothrow.bg",  rpc::ExecFile::flag_background);
   CMD2_EXECUTE     ("execute.capture",         rpc::ExecFile::flag_throw | rpc::ExecFile::flag_expand_tilde | rpc::ExecFile::flag_capture);
   CMD2_EXECUTE     ("execute.capture_nothrow", rpc::ExecFile::flag_expand_tilde | rpc::ExecFile::flag_capture);
+
+  CMD2_ANY_STRING  ("log.execute",    std::bind(&apply_log, std::placeholders::_2, 0));
+  CMD2_ANY_STRING  ("log.vmmap.dump", std::bind(&log_vmmap_dump, std::placeholders::_2));
+  CMD2_ANY_STRING_V("log.xmlrpc",     std::bind(&ThreadWorker::set_xmlrpc_log, worker_thread, std::placeholders::_2));
+  CMD2_ANY_LIST    ("log.libtorrent", std::bind(&apply_log_libtorrent, std::placeholders::_2));
 
   CMD2_ANY_LIST    ("file.append",    std::bind(&cmd_file_append, std::placeholders::_2));
 

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -72,11 +72,11 @@ ElementMenu::ElementMenu() :
   m_entry(entry_invalid) {
 
   // Move bindings into a function that defines default bindings.
-  m_bindings[KEY_LEFT]  = m_bindings['B' - '@'] = std::bind(&slot_type::operator(), &m_slot_exit);
-  m_bindings[KEY_RIGHT] = m_bindings['F' - '@'] = std::bind(&ElementMenu::entry_select, this);
+  m_bindings[KEY_LEFT] = m_bindings['B' - '@']  = sigc::mem_fun(&m_slotExit, &slot_type::operator());  
+  m_bindings[KEY_RIGHT] = m_bindings['F' - '@'] = sigc::mem_fun(this, &ElementMenu::entry_select);
 
-  m_bindings[KEY_UP]   = m_bindings['P' - '@'] = std::bind(&ElementMenu::entry_prev, this);
-  m_bindings[KEY_DOWN] = m_bindings['N' - '@'] = std::bind(&ElementMenu::entry_next, this);
+  m_bindings[KEY_UP]   = m_bindings['P' - '@'] = sigc::mem_fun(this, &ElementMenu::entry_prev);
+  m_bindings[KEY_DOWN] = m_bindings['N' - '@'] = sigc::mem_fun(this, &ElementMenu::entry_next);
 }
 
 ElementMenu::~ElementMenu() {

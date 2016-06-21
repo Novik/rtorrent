@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -71,6 +71,8 @@ private:
   char                key_id(torrent::BlockTransfer::key_type key);
 
   core::Download*     m_download;
+
+  unsigned int*       m_focus;
   assigned_vector     m_assigned;
 };
 

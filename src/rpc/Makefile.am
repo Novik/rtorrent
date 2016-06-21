@@ -27,4 +27,4 @@ libsub_rpc_a_SOURCES = \
 	xmlrpc.h \
 	xmlrpc.cc
 
-AM_CPPFLAGS = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(srcdir)/.. -I$(top_srcdir)

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,6 +36,8 @@
 
 #ifndef RTORRENT_UI_ELEMENT_TEXT_H
 #define RTORRENT_UI_ELEMENT_TEXT_H
+
+#include <sigc++/functors/slot.h>
 
 #include "core/download.h"
 #include "display/text_element_string.h"

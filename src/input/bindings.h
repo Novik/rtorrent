@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,31 +38,30 @@
 #define RTORRENT_INPUT_BINDINGS_H
 
 #include <map>
-#include lt_tr1_functional
-
-#include "display/attributes.h"
+#include <ncurses.h>
+#include <sigc++/functors/slot.h>
 
 namespace input {
 
-class Bindings : private std::map<int, std::function<void ()> > {
+class Bindings : private std::map<int, sigc::slot0<void> > {
 public:
-  typedef std::function<void ()> slot_void;
-  typedef std::map<int, slot_void>    base_type;
+  typedef sigc::slot0<void>    Slot;
+  typedef std::map<int, Slot > Base;
 
-  using base_type::iterator;
-  using base_type::const_iterator;
-  using base_type::reverse_iterator;
-  using base_type::const_reverse_iterator;
+  using Base::iterator;
+  using Base::const_iterator;
+  using Base::reverse_iterator;
+  using Base::const_reverse_iterator;
 
-  using base_type::begin;
-  using base_type::end;
-  using base_type::rbegin;
-  using base_type::rend;
-  using base_type::find;
+  using Base::begin;
+  using Base::end;
+  using Base::rbegin;
+  using Base::rend;
+  using Base::find;
 
-  using base_type::erase;
+  using Base::erase;
 
-  using base_type::operator[];
+  using Base::operator[];
 
   Bindings() : m_enabled(true) {}
 
@@ -71,7 +70,7 @@ public:
 
   bool                pressed(int key);
 
-  void                ignore(int key)     { (*this)[key] = slot_void(); }
+  void                ignore(int key)     { (*this)[key] = Slot(); }
 
 private:
   bool                m_enabled;

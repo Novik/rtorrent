@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@
 #ifndef RTORRENT_CORE_DOWNLOAD_H
 #define RTORRENT_CORE_DOWNLOAD_H
 
+#include <sigc++/connection.h>
 #include <torrent/download.h>
 #include <torrent/download_info.h>
 #include <torrent/hash_string.h>
@@ -59,7 +60,6 @@ public:
   typedef torrent::FileList             file_list_type;
   typedef torrent::PeerList             peer_list_type;
   typedef torrent::TrackerList          tracker_list_type;
-  typedef torrent::TrackerController    tracker_controller_type;
   typedef torrent::ConnectionList       connection_list_type;
   typedef download_type::ConnectionType connection_type;
 
@@ -71,8 +71,7 @@ public:
   Download(download_type d);
   ~Download();
 
-  const torrent::DownloadInfo*  info() const                    { return m_download.info(); }
-  const torrent::download_data* data() const                    { return m_download.data(); }
+  const torrent::DownloadInfo* info() const                    { return m_download.info(); }
 
   torrent::DownloadMain* main()                                { return m_download.main(); }
 
@@ -105,13 +104,13 @@ public:
   tracker_list_type*  tracker_list()                           { return m_download.tracker_list(); }
   uint32_t            tracker_list_size() const                { return m_download.tracker_list()->size(); }
 
-  tracker_controller_type* tracker_controller()                { return m_download.tracker_controller(); }
-
   connection_list_type* connection_list()                      { return m_download.connection_list(); }
   uint32_t              connection_list_size() const;
 
   const std::string&  message() const                          { return m_message; }
   void                set_message(const std::string& msg)      { m_message = msg; }
+
+  uint32_t            chunks_failed() const                    { return m_chunksFailed; }
 
   void                enable_udp_trackers(bool state);
 
@@ -129,24 +128,28 @@ public:
 
   float               distributed_copies() const;
 
-  // HACK: Choke group setting.
-  unsigned int        group() const { return m_group; }
-  void                set_group(unsigned int g) { m_group = g; }
-
 private:
   Download(const Download&);
   void operator () (const Download&);
 
   void                receive_tracker_msg(std::string msg);
+  void                receive_storage_error(std::string msg);
 
   void                receive_chunk_failed(uint32_t idx);
 
   // Store the FileList instance so we can use slots etc on it.
   download_type       m_download;
+
   bool                m_hashFailed;
+
   std::string         m_message;
+  uint32_t            m_chunksFailed;
+
   uint32_t            m_resumeFlags;
-  unsigned int        m_group;
+
+  sigc::connection    m_connTrackerSucceeded;
+  sigc::connection    m_connTrackerFailed;
+  sigc::connection    m_connStorageError;
 };
 
 inline bool

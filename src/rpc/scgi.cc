@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -88,12 +88,7 @@ SCgi::open_named(const std::string& filename) {
   char buffer[sizeof(sockaddr_un) + filename.size()];
   sockaddr_un* sa = reinterpret_cast<sockaddr_un*>(buffer);
 
-#ifdef __sun__
-  sa->sun_family = AF_UNIX;
-#else
   sa->sun_family = AF_LOCAL;
-#endif
-
   std::memcpy(sa->sun_path, filename.c_str(), filename.size() + 1);
 
   if (!get_fd().open_local())
@@ -144,7 +139,7 @@ SCgi::event_read() {
   while ((fd = get_fd().accept(&sa)).is_valid()) {
     SCgiTask* task = std::find_if(m_task, m_task + max_tasks, std::mem_fun_ref(&SCgiTask::is_available));
 
-    if (task == m_task + max_tasks) {
+    if (task == task + max_tasks) {
       // Ergh... just closing for now.
       fd.close();
       continue;
@@ -165,16 +160,16 @@ SCgi::event_error() {
 }
 
 bool
-SCgi::receive_call(SCgiTask* task, const char* buffer, uint32_t length, bool trusted) {
+SCgi::receive_call(SCgiTask* task, const char* buffer, uint32_t length) {
   slot_write slotWrite;
   slotWrite.set(rak::mem_fn(task, &SCgiTask::receive_write));
 
-  torrent::thread_base::acquire_global_lock();
-  torrent::main_thread()->interrupt();
+  ThreadBase::acquire_global_lock();
+  ThreadBase::interrupt_main_polling();
 
-  bool result = xmlrpc.process(buffer, length, slotWrite, trusted);
+  bool result = xmlrpc.process(buffer, length, slotWrite);
 
-  torrent::thread_base::release_global_lock();
+  ThreadBase::release_global_lock();
 
   return result;
 }

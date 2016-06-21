@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -156,7 +156,7 @@ xmlrpc_to_target(xmlrpc_env* env, xmlrpc_value* value) {
       throw xmlrpc_error(XMLRPC_TYPE_ERROR, "Unsupported target type found.");
     }
 
-    core::Download* download = xmlrpc.slot_find_download()(str);
+    core::Download* download = xmlrpc.get_slot_find_download()(str);
 
     if (download == NULL) {
       ::free((void*)str);
@@ -186,7 +186,7 @@ xmlrpc_to_target(xmlrpc_env* env, xmlrpc_value* value) {
       if (*str == '\0' || *end_ptr != '\0')
         throw xmlrpc_error(XMLRPC_TYPE_ERROR, "Invalid index.");
 
-      target = rpc::make_target(XmlRpc::call_file, xmlrpc.slot_find_file()(download, index));
+      target = rpc::make_target(XmlRpc::call_file, xmlrpc.get_slot_find_file()(download, index));
       break;
 
     case 't':
@@ -195,7 +195,7 @@ xmlrpc_to_target(xmlrpc_env* env, xmlrpc_value* value) {
       if (*str == '\0' || *end_ptr != '\0')
         throw xmlrpc_error(XMLRPC_TYPE_ERROR, "Invalid index.");
 
-      target = rpc::make_target(XmlRpc::call_tracker, xmlrpc.slot_find_tracker()(download, index));
+      target = rpc::make_target(XmlRpc::call_tracker, xmlrpc.get_slot_find_tracker()(download, index));
       break;
 
     case 'p':
@@ -206,7 +206,7 @@ xmlrpc_to_target(xmlrpc_env* env, xmlrpc_value* value) {
       if (hash_end == end_ptr || *hash_end != '\0')
         throw xmlrpc_error(XMLRPC_TYPE_ERROR, "Not a hash string.");
 
-      target = rpc::make_target(XmlRpc::call_peer, xmlrpc.slot_find_peer()(download, hash));
+      target = rpc::make_target(XmlRpc::call_peer, xmlrpc.get_slot_find_peer()(download, hash));
       break;
     }
     default:
@@ -233,8 +233,8 @@ xmlrpc_to_index_type(int index, int callType, core::Download* download) {
   void* result;
 
   switch (callType) {
-  case XmlRpc::call_file:    result = xmlrpc.slot_find_file()(download, index); break;
-  case XmlRpc::call_tracker: result = xmlrpc.slot_find_tracker()(download, index); break;
+  case XmlRpc::call_file:    result = xmlrpc.get_slot_find_file()(download, index); break;
+  case XmlRpc::call_tracker: result = xmlrpc.get_slot_find_tracker()(download, index); break;
   default: result = NULL; break;
   }
 
@@ -436,32 +436,6 @@ object_to_xmlrpc(xmlrpc_env* env, const torrent::Object& object) {
     return result;
   }
 
-  case torrent::Object::TYPE_DICT_KEY:
-  {
-    xmlrpc_value* result = xmlrpc_array_new(env);
-    
-    xmlrpc_value* key_item = object_to_xmlrpc(env, object.as_dict_key());
-    xmlrpc_array_append_item(env, result, key_item);
-    xmlrpc_DECREF(key_item);
-    
-    if (object.as_dict_obj().is_list()) {
-      for (torrent::Object::list_const_iterator
-             itr = object.as_dict_obj().as_list().begin(),
-             last = object.as_dict_obj().as_list().end();
-           itr != last; itr++) {
-        xmlrpc_value* item = object_to_xmlrpc(env, *itr);
-        xmlrpc_array_append_item(env, result, item);
-        xmlrpc_DECREF(item);
-      }
-    } else {
-      xmlrpc_value* arg_item = object_to_xmlrpc(env, object.as_dict_obj());
-      xmlrpc_array_append_item(env, result, arg_item);
-      xmlrpc_DECREF(arg_item);
-    }
-
-    return result;
-  }
-
   default:
     return xmlrpc_int_new(env, 0);
   }
@@ -526,80 +500,11 @@ XmlRpc::cleanup() {
   delete (xmlrpc_env*)m_env;
 }
 
-static std::vector<std::string> untrusted_commands = 
-{
-	"execute",
-	"execute.capture",
-	"execute.capture_nothrow",
-	"execute.nothrow",
-	"execute.nothrow.bg",
-	"execute.raw",
-	"execute.raw.bg",
-	"execute.raw_nothrow",
-	"execute.raw_nothrow.bg",
-	"execute.throw",
-	"execute.throw.bg",
-	"execute2",
-	"method.insert",
-	"method.redirect",
-	"method.set",
-	"method.set_key",
-	"schedule",
-	"schedule2",
-	"import",
-	"d.create_link",
-	"d.directory.set",
-	"session.path.set",
-	"d.directory_base.set",
-	"directory.default.set",
-// old commands	
-	"create_link",
-	"d.set_directory",
-	"d.set_directory_base",
-	"set_directory",
-	"set_session",
-	"execute_capture",
-	"execute_capture_nothrow",
-	"execute_nothrow",
-	"execute_nothrow_bg",
-	"execute_raw",
-	"execute_raw_bg",
-	"execute_raw_nothrow",
-	"execute_raw_nothrow_bg",
-	"execute_throw",
-	"execute_throw_bg",	
-	"system.method.insert",
-	"system.method.redirect",
-	"system.method.set",
-	"system.method.set_key",	
-	"on_insert",
-	"on_erase",
-	"on_open",
-	"on_close",
-	"on_start",
-	"on_stop",
-	"on_hash_queued",
-	"on_hash_removed",
-	"on_hash_done",
-	"on_finished"
-};
-
-void xmlrpc_check_command(xmlrpc_env* const envP,
-	const char* const methodName,
-	xmlrpc_value* const paramArrayP,
-	void* const userData)
-{
-	if(std::find(untrusted_commands.begin(), untrusted_commands.end(), methodName) != untrusted_commands.end())
-		xmlrpc_faultf(envP, "Command '%s' is not enabled for untrusted connections", methodName);
-}
-
 bool
-XmlRpc::process(const char* inBuffer, uint32_t length, slot_write slotWrite, bool trusted) {
+XmlRpc::process(const char* inBuffer, uint32_t length, slot_write slotWrite) {
   xmlrpc_env localEnv;
   xmlrpc_env_init(&localEnv);
 
-  xmlrpc_registry_set_preinvoke_method(&localEnv, (xmlrpc_registry*)m_registry, 
-  	(xmlrpc_preinvoke_method) (trusted ? NULL : &xmlrpc_check_command), NULL);
   xmlrpc_mem_block* memblock = xmlrpc_registry_process_call(&localEnv, (xmlrpc_registry*)m_registry, NULL, inBuffer, length);
 
   if (localEnv.fault_occurred && localEnv.fault_code == XMLRPC_INTERNAL_ERROR)

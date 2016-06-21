@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,30 +43,32 @@
 #include <getopt.h>
 #include <stdexcept>
 #include <unistd.h>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
 
 #include "option_parser.h"
 
 void
-OptionParser::insert_flag(char c, slot_string s) {
-  m_container[c].m_slot = s;
+OptionParser::insert_flag(char c, Slot s) {
+  m_container[c].m_slot = sigc::hide(s);
   m_container[c].m_useOption = false;
 }
 
 void
-OptionParser::insert_option(char c, slot_string s) {
+OptionParser::insert_option(char c, SlotString s) {
   m_container[c].m_slot = s;
   m_container[c].m_useOption = true;
 }
 
 void
-OptionParser::insert_option_list(char c, slot_string_pair s) {
-  m_container[c].m_slot = std::bind(&OptionParser::call_option_list, s, std::placeholders::_1);
+OptionParser::insert_option_list(char c, SlotStringPair s) {
+  m_container[c].m_slot = sigc::bind<0>(sigc::ptr_fun(&OptionParser::call_option_list), s);
   m_container[c].m_useOption = true;
 }
 
 void
-OptionParser::insert_int_pair(char c, slot_int_pair s) {
-  m_container[c].m_slot = std::bind(&OptionParser::call_int_pair, s, std::placeholders::_1);
+OptionParser::insert_int_pair(char c, SlotIntPair s) {
+  m_container[c].m_slot = sigc::bind<0>(sigc::ptr_fun(&OptionParser::call_int_pair), s);
   m_container[c].m_useOption = true;
 }
 
@@ -116,7 +118,7 @@ OptionParser::call(char c, const std::string& arg) {
 }
 
 void
-OptionParser::call_option_list(slot_string_pair slot, const std::string& arg) {
+OptionParser::call_option_list(SlotStringPair slot, const std::string& arg) {
   std::string::const_iterator itr = arg.begin();
 
   while (itr != arg.end()) {
@@ -136,7 +138,7 @@ OptionParser::call_option_list(slot_string_pair slot, const std::string& arg) {
 }
 
 void
-OptionParser::call_int_pair(slot_int_pair slot, const std::string& arg) {
+OptionParser::call_int_pair(SlotIntPair slot, const std::string& arg) {
   int a, b;
 
   if (std::sscanf(arg.c_str(), "%u-%u", &a, &b) != 2)

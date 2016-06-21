@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -63,7 +63,7 @@ public:
   static fixed_key_type from_string(const std::string& str)             { fixed_key_type k; k.set_c_str(str.c_str(), str.size()); return k; }
   static fixed_key_type from_raw_string(const torrent::raw_string& str) { fixed_key_type k; k.set_data(str.data(), str.size()); return k; }
 
-  bool              empty() const { return m_size == 0; }
+  bool              empty() const { return m_size == 0;; }
   size_type         size() const  { return m_size; }
 
   iterator          begin() const { return m_data; }

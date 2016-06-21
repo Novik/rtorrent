@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,34 +39,33 @@
 
 #include "globals.h"
 
-#include lt_tr1_functional
 #include <torrent/object.h>
 
 namespace rpc {
 
 class CommandSchedulerItem {
 public:
-  typedef std::function<void ()> slot_void;
+  typedef rak::function0<void> Slot;
 
   CommandSchedulerItem(const std::string& key) : m_key(key), m_interval(0) {}
   ~CommandSchedulerItem();
 
-  bool                is_queued() const           { return m_task.is_queued(); }
+  bool                is_queued() const                       { return m_task.is_queued(); }
 
   void                enable(rak::timer t);
   void                disable();
 
-  const std::string&  key() const                 { return m_key; }
-  torrent::Object&    command()                   { return m_command; }
+  const std::string&  key() const                             { return m_key; }
+  torrent::Object&    command()                               { return m_command; }
 
   // 'interval()' should in the future return some more dynamic values.
-  uint32_t            interval() const            { return m_interval; }
-  void                set_interval(uint32_t v)    { m_interval = v; }
+  uint32_t            interval() const                        { return m_interval; }
+  void                set_interval(uint32_t v)                { m_interval = v; }
 
-  rak::timer          time_scheduled() const      { return m_timeScheduled; }
+  rak::timer          time_scheduled() const                  { return m_timeScheduled; }
   rak::timer          next_time_scheduled() const;
 
-  slot_void&          slot()                      { return m_task.slot(); }
+  void                set_slot(Slot::base_type* s)            { m_task.set_slot(s); }
 
 private:
   CommandSchedulerItem(const CommandSchedulerItem&);

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,9 +42,9 @@
 #define RTORRENT_CORE_DOWNLOAD_FACTORY_H
 
 #include <iosfwd>
+#include <sigc++/functors/slot.h>
 #include <rak/priority_queue_default.h>
 #include <torrent/object.h>
-#include lt_tr1_functional
 
 #include "http_queue.h"
 
@@ -54,7 +54,7 @@ class Manager;
 
 class DownloadFactory {
 public:
-  typedef std::function<void ()> slot_void;
+  typedef sigc::slot<void> Slot;
   typedef std::vector<std::string> command_list_type;
 
   // Do not destroy this object while it is in a HttpQueue.
@@ -80,7 +80,7 @@ public:
   bool                print_log() const     { return m_printLog; }
   void                set_print_log(bool v) { m_printLog = v; }
 
-  void                slot_finished(slot_void s) { m_slot_finished = s; }
+  void                slot_finished(Slot s) { m_slotFinished = s; }
 
 private:
   void                receive_load();
@@ -88,8 +88,6 @@ private:
   void                receive_commit();
   void                receive_success();
   void                receive_failed(const std::string& msg);
-
-  void                log_created(Download* download, torrent::Object* rtorrent);
 
   void                initialize_rtorrent(Download* download, torrent::Object* rtorrent);
 
@@ -109,7 +107,7 @@ private:
   command_list_type         m_commands;
   torrent::Object::map_type m_variables;
 
-  slot_void           m_slot_finished;
+  Slot                m_slotFinished;
   rak::priority_item  m_taskLoad;
   rak::priority_item  m_taskCommit;
 };

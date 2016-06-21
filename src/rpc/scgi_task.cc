@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,7 +43,6 @@
 #include <sys/socket.h>
 #include <torrent/exceptions.h>
 #include <torrent/poll.h>
-#include <torrent/utils/log.h>
 
 #include "utils/socket_fd.h"
 
@@ -106,19 +105,6 @@ SCgiTask::close() {
 //   control->core()->push_log(std::string(buffer));
 }
 
-char* memstr(char* haystack, char* needle, int size)
-{
-	char* p;
-	char needlesize = strlen(needle);
-
-	for(p = haystack; p <= (haystack-needlesize+size); p++)
-	{
-		if(memcmp(p, needle, needlesize) == 0)
-			return(p);
-	}
-	return(NULL);
-}
-
 void
 SCgiTask::event_read() {
   int bytes = ::recv(m_fileDesc, m_position, m_bufferSize - (m_position - m_buffer), 0);
@@ -162,8 +148,6 @@ SCgiTask::event_read() {
     if (*contentPos != '\0' || contentSize <= 0 || contentSize > max_content_size)
       goto event_read_failed;
 
-    m_trusted = (memstr(current,"UNTRUSTED_CONNECTION",headerSize)==NULL);
-
     m_body = current + headerSize + 1;
     headerSize = std::distance(m_buffer, m_body);
 
@@ -192,18 +176,14 @@ SCgiTask::event_read() {
   worker_thread->poll()->insert_write(this);
 
   if (m_parent->log_fd() >= 0) {
-    int __UNUSED result;
-
     // Clean up logging, this is just plain ugly...
     //    write(m_logFd, "\n---\n", sizeof("\n---\n"));
-    result = write(m_parent->log_fd(), m_buffer, m_bufferSize);
-    result = write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
+    write(m_parent->log_fd(), m_buffer, m_bufferSize);
+    write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
   }
 
-  lt_log_print_dump(torrent::LOG_RPC_DUMP, m_body, m_bufferSize - std::distance(m_buffer, m_body), "scgi", "RPC read.", 0);
-
   // Close if the call failed, else stay open to write back data.
-  if (!m_parent->receive_call(this, m_body, m_bufferSize - std::distance(m_buffer, m_body), m_trusted))
+  if (!m_parent->receive_call(this, m_body, m_bufferSize - std::distance(m_buffer, m_body)))
     close();
 
   return;
@@ -254,14 +234,11 @@ SCgiTask::receive_write(const char* buffer, uint32_t length) {
   std::memcpy(m_buffer + headerSize, buffer, length);
 
   if (m_parent->log_fd() >= 0) {
-    int __UNUSED result;
     // Clean up logging, this is just plain ugly...
     //    write(m_logFd, "\n---\n", sizeof("\n---\n"));
-    result = write(m_parent->log_fd(), m_buffer, m_bufferSize);
-    result = write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
+    write(m_parent->log_fd(), m_buffer, m_bufferSize);
+    write(m_parent->log_fd(), "\n---\n", sizeof("\n---\n"));
   }
-
-  lt_log_print_dump(torrent::LOG_RPC_DUMP, m_buffer, m_bufferSize, "scgi", "RPC write.", 0);
 
   event_write();
   return true;

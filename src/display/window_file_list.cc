@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,7 +36,6 @@
 
 #include "config.h"
 
-#include <locale>
 #include <stdio.h>
 #include <torrent/path.h>
 #include <torrent/data/file.h>
@@ -124,7 +123,7 @@ WindowFileList::redraw() {
   if (fl->size_files() == 0 || m_canvas->height() < 2)
     return;
 
-  std::vector<iterator> entries(m_canvas->height() - 1);
+  iterator entries[m_canvas->height() - 1];
 
   unsigned int last = 0;
 

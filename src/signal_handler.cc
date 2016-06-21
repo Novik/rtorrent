@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,19 +36,10 @@
 
 #include "config.h"
 
-#include <signal.h>
 #include <stdexcept>
-#include <string>
-
-#include "rak/error_number.h"
 #include "signal_handler.h"
 
-#ifdef __sun__
-#include <iso/signal_iso.h>
-//extern "C" void (*signal (int sig, void (*disp)(int)))(int);
-#endif
-
-SignalHandler::slot_void SignalHandler::m_handlers[HIGHEST_SIGNAL];
+SignalHandler::Slot SignalHandler::m_handlers[HIGHEST_SIGNAL];
 
 void
 SignalHandler::set_default(unsigned int signum) {
@@ -56,7 +47,7 @@ SignalHandler::set_default(unsigned int signum) {
     throw std::logic_error("SignalHandler::set_default(...) received invalid signal value.");
 
   signal(signum, SIG_DFL);
-  m_handlers[signum] = slot_void();
+  m_handlers[signum].disconnect();
 }
 
 void
@@ -65,41 +56,19 @@ SignalHandler::set_ignore(unsigned int signum) {
     throw std::logic_error("SignalHandler::set_ignore(...) received invalid signal value.");
 
   signal(signum, SIG_IGN);
-  m_handlers[signum] = slot_void();
+  m_handlers[signum].disconnect();
 }
 
 void
-SignalHandler::set_handler(unsigned int signum, slot_void slot) {
+SignalHandler::set_handler(unsigned int signum, Slot slot) {
   if (signum > HIGHEST_SIGNAL)
     throw std::logic_error("SignalHandler::set_handler(...) received invalid signal value.");
 
-  if (!slot)
+  if (slot.empty())
     throw std::logic_error("SignalHandler::set_handler(...) received an empty slot.");
 
-  struct sigaction sa;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART;
-  sa.sa_handler = &SignalHandler::caught;
-
-  if (sigaction(signum, &sa, NULL) == -1)
-    throw std::logic_error("Could not set sigaction: " + std::string(rak::error_number::current().c_str()));
-  else
-    m_handlers[signum] = slot;
-}
-
-void
-SignalHandler::set_sigaction_handler(unsigned int signum, handler_slot slot) {
-  if (signum > HIGHEST_SIGNAL)
-    throw std::logic_error("SignalHandler::set_handler(...) received invalid signal value.");
-
-  struct sigaction sa;
-  sa.sa_sigaction = slot;
-  sa.sa_flags = SA_SIGINFO;
-
-  sigemptyset(&sa.sa_mask);
-
-  if (sigaction(signum, &sa, NULL) == -1)
-    throw std::logic_error("Could not set sigaction: " + std::string(rak::error_number::current().c_str()));
+  signal(signum, &SignalHandler::caught);
+  m_handlers[signum] = slot;
 }
 
 void
@@ -107,7 +76,7 @@ SignalHandler::caught(int signum) {
   if ((unsigned)signum > HIGHEST_SIGNAL)
     throw std::logic_error("SignalHandler::caught(...) received invalid signal from the kernel, bork bork bork.");
 
-  if (!m_handlers[signum])
+  if (m_handlers[signum].empty())
     throw std::logic_error("SignalHandler::caught(...) received a signal we don't have a handler for.");
 
   m_handlers[signum]();

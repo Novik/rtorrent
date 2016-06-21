@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@
 #ifndef RTORRENT_UI_ELEMENT_LOG_COMPLETE_H
 #define RTORRENT_UI_ELEMENT_LOG_COMPLETE_H
 
-#include <torrent/utils/log_buffer.h>
+#include "core/log.h"
 
 #include "element_base.h"
 
@@ -53,7 +53,7 @@ class ElementLogComplete : public ElementBase {
 public:
   typedef display::WindowLogComplete    WLogComplete;
 
-  ElementLogComplete(torrent::log_buffer* l);
+  ElementLogComplete(core::Log* l);
 
   void                activate(display::Frame* frame, bool focus = true);
   void                disable();
@@ -61,11 +61,9 @@ public:
   display::Window*    window();
 
 private:
-  void                received_update();
-
   WLogComplete*       m_window;
   
-  torrent::log_buffer* m_log;
+  core::Log*          m_log;
 };
 
 }

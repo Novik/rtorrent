@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,26 +39,42 @@
 
 #include <pthread.h>
 #include <sys/types.h>
-#include <torrent/utils/thread_base.h>
+#include <torrent/thread_base.h>
 
 #include "rak/priority_queue_default.h"
 #include "core/poll_manager.h"
 
+struct thread_queue_hack;
+
 // Move this class to libtorrent.
 
-class thread_queue_hack;
+struct thread_queue_hack;
 
-class ThreadBase : public torrent::thread_base {
+class ThreadBase : public torrent::ThreadBase {
 public:
   typedef rak::priority_queue_default priority_queue;
   typedef void (*thread_base_func)(ThreadBase*);
+  typedef void* (*pthread_func)(void*);
+
+  enum state_type {
+    STATE_UNKNOWN,
+    STATE_INITIALIZED,
+    STATE_ACTIVE,
+    STATE_INACTIVE
+  };
 
   ThreadBase();
   virtual ~ThreadBase();
 
+  bool                is_active() const { return m_state == STATE_ACTIVE; }
+
+  torrent::Poll*      poll() { return m_pollManager->get_torrent_poll(); }
+  core::PollManager*  poll_manager() { return m_pollManager; }
   priority_queue&     task_scheduler() { return m_taskScheduler; }
 
-  // Throw torrent::shutdown_exception to stop the thread.
+  virtual void        init_thread() = 0;
+
+  void                start_thread();
   static void         stop_thread(ThreadBase* thread);
 
   // ATM, only interaction with a thread's allowed by other threads is
@@ -66,16 +82,22 @@ public:
 
   void                queue_item(thread_base_func newFunc);
 
+  static void*        event_loop(ThreadBase* threadBase);
+
+  // Move to libtorrent some day.
+  static void         interrupt_main_polling();
+
 protected:
-  int64_t             next_timeout_usec();
+  inline rak::timer   client_next_timeout();
 
   void                call_queued_items();
-  virtual void        call_events();
 
-  // TODO: Add thread name.
+  pthread_t           m_thread;
+  state_type          m_state;
 
   // The timer needs to be sync'ed when updated...
 
+  core::PollManager*          m_pollManager;
   rak::priority_queue_default m_taskScheduler;
 
   rak::priority_item  m_taskShutdown;

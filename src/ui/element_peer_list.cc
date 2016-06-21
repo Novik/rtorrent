@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
 
 #include "config.h"
 
+#include <sigc++/adaptors/bind.h>
 #include <torrent/exceptions.h>
 #include <torrent/rate.h>
 #include <torrent/hash_string.h>
@@ -64,33 +65,27 @@ ElementPeerList::ElementPeerList(core::Download* d) :
   std::for_each(m_download->download()->connection_list()->begin(), m_download->download()->connection_list()->end(),
                 rak::bind1st(std::mem_fun<void,PList,PList::const_reference>(&PList::push_back), &m_list));
 
-  torrent::ConnectionList* connection_list = m_download->download()->connection_list();
-
-  m_peer_connected = connection_list->signal_connected().insert(connection_list->signal_connected().end(),
-                                                                std::bind(&ElementPeerList::receive_peer_connected, this, std::placeholders::_1));
-  m_peer_disconnected = connection_list->signal_disconnected().insert(connection_list->signal_disconnected().end(),
-                                                                      std::bind(&ElementPeerList::receive_peer_disconnected, this, std::placeholders::_1));
+  m_connPeerConnected    = m_download->download()->connection_list()->signal_connected().connect(sigc::mem_fun(*this, &ElementPeerList::receive_peer_connected));
+  m_connPeerDisconnected = m_download->download()->connection_list()->signal_disconnected().connect(sigc::mem_fun(*this, &ElementPeerList::receive_peer_disconnected));
 
   m_windowList  = new display::WindowPeerList(m_download, &m_list, &m_listItr);
   m_elementInfo = create_info();
 
-  m_elementInfo->slot_exit(std::bind(&ElementPeerList::activate_display, this, DISPLAY_LIST));
+  m_elementInfo->slot_exit(sigc::bind(sigc::mem_fun(this, &ElementPeerList::activate_display), DISPLAY_LIST));
 
-  m_bindings['k']       = std::bind(&ElementPeerList::receive_disconnect_peer, this);
-  m_bindings['*']       = std::bind(&ElementPeerList::receive_snub_peer, this);
-  m_bindings['B']       = std::bind(&ElementPeerList::receive_ban_peer, this);
-  m_bindings[KEY_LEFT]  = m_bindings['B' - '@'] = std::bind(&slot_type::operator(), &m_slot_exit);
-  m_bindings[KEY_RIGHT] = m_bindings['F' - '@'] = std::bind(&ElementPeerList::activate_display, this, DISPLAY_INFO);
+  m_bindings['k']       = sigc::mem_fun(this, &ElementPeerList::receive_disconnect_peer);
+  m_bindings['*']       = sigc::mem_fun(this, &ElementPeerList::receive_snub_peer);
+  m_bindings['B']       = sigc::mem_fun(this, &ElementPeerList::receive_ban_peer);
+  m_bindings[KEY_LEFT] = m_bindings['B' - '@']  = sigc::mem_fun(&m_slotExit, &slot_type::operator());  
+  m_bindings[KEY_RIGHT] = m_bindings['F' - '@'] = sigc::bind(sigc::mem_fun(this, &ElementPeerList::activate_display), DISPLAY_INFO);
 
-  m_bindings[KEY_UP]   = m_bindings['P' - '@'] = std::bind(&ElementPeerList::receive_prev, this);
-  m_bindings[KEY_DOWN] = m_bindings['N' - '@'] = std::bind(&ElementPeerList::receive_next, this);
+  m_bindings[KEY_UP]   = m_bindings['P' - '@'] = sigc::mem_fun(this, &ElementPeerList::receive_prev);
+  m_bindings[KEY_DOWN] = m_bindings['N' - '@'] = sigc::mem_fun(this, &ElementPeerList::receive_next);
 }
 
 ElementPeerList::~ElementPeerList() {
-  torrent::ConnectionList* connection_list = m_download->download()->connection_list();
-
-  connection_list->signal_connected().erase(m_peer_connected);
-  connection_list->signal_disconnected().erase(m_peer_disconnected);
+  m_connPeerConnected.disconnect();
+  m_connPeerDisconnected.disconnect();
 
   delete m_windowList;
   delete m_elementInfo;

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -66,7 +66,7 @@ cmd_scheduler_simple_removed(core::Download* download) {
   core::View* viewActive = *control->view_manager()->find("active");
   int64_t maxActive = rpc::call_command("scheduler.max_active", torrent::Object()).as_value();
 
-  if ((int64_t)viewActive->size_visible() >= maxActive)
+  if (viewActive->size_visible() >= maxActive)
     return torrent::Object();
 
   // The 'started' view contains all the views we may choose amongst.

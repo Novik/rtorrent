@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,4 +43,6 @@ rak::timer                  cachedTime;
 rpc::ip_table_list          ip_tables;
 
 Control*                    control = NULL;
-ThreadWorker*               worker_thread = NULL;
+//__thread ThreadBase* main_thread = NULL;
+ThreadMain* main_thread = NULL;
+ThreadWorker* worker_thread = NULL;

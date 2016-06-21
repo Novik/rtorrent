@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -50,7 +50,8 @@ namespace display {
 
 WindowDownloadTransferList::WindowDownloadTransferList(core::Download* d, unsigned int *focus) :
   Window(new Canvas, 0, 0, 0, extent_full, extent_full),
-  m_download(d) {
+  m_download(d),
+  m_focus(focus) {
 }
 
 void

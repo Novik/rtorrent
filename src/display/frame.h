@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -59,9 +59,6 @@ public:
     bounds_type() {}
     bounds_type(extent_type minW, extent_type minH, extent_type maxW, extent_type maxH) :
       minWidth(minW), minHeight(minH), maxWidth(maxW), maxHeight(maxH) {}
-
-    extent_type min_width() const  { return minWidth; }
-    extent_type min_height() const { return minHeight; }
 
     extent_type minWidth;
     extent_type minHeight;

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@
 #include <ctime>
 #include <rak/functional.h>
 #include <rak/functional_fun.h>
+#include <sigc++/adaptors/bind.h>
 
 #include "core/manager.h"
 #include "core/view_manager.h"
@@ -52,7 +53,8 @@
 #include "control.h"
 #include "command_helpers.h"
 
-typedef void (core::ViewManager::*view_event_slot)(const std::string&, const torrent::Object&);
+typedef void (core::ViewManager::*view_cfilter_slot)(const std::string&, const torrent::Object&);
+typedef void (core::ViewManager::*view_event_slot)(const std::string&, const std::string&);
 
 torrent::Object
 apply_view_filter_on(const torrent::Object::list_type& args) {
@@ -75,11 +77,32 @@ apply_view_filter_on(const torrent::Object::list_type& args) {
 }
 
 torrent::Object
+apply_view_cfilter(view_cfilter_slot viewFilterSlot, const torrent::Object::list_type& args) {
+  if (args.size() != 2)
+    throw torrent::input_error("Too few arguments.");
+
+  const std::string& name = args.front().as_string();
+  
+  if (name.empty())
+    throw torrent::input_error("First argument must be a string.");
+
+  (control->view_manager()->*viewFilterSlot)(name, args.back());
+
+  return torrent::Object();
+}
+
+torrent::Object
 apply_view_event(view_event_slot viewFilterSlot, const torrent::Object::list_type& args) {
   if (args.size() != 2)
-    throw torrent::input_error("Wrong argument count.");
+    throw torrent::input_error("Too few arguments.");
 
-  (control->view_manager()->*viewFilterSlot)(args.front().as_string(), args.back());
+  const std::string& name = args.front().as_string();
+  
+  if (name.empty())
+    throw torrent::input_error("First argument must be a string.");
+
+  (control->view_manager()->*viewFilterSlot)(name, args.back().as_string());
+
   return torrent::Object();
 }
 
@@ -449,7 +472,7 @@ torrent::Object
 cmd_view_persistent(const torrent::Object::string_type& args) {
   core::View* view = *control->view_manager()->find_throw(args);
   
-  if (!view->get_filter().is_empty() || !view->event_added().is_empty() || !view->event_removed().is_empty())
+  if (!view->get_filter().is_empty() || !view->get_event_added().empty() || !view->get_event_removed().empty())
     throw torrent::input_error("Cannot set modified views as persitent.");
 
   view->set_filter("d.views.has=" + args);
@@ -464,11 +487,6 @@ torrent::Object
 cmd_ui_set_view(const torrent::Object::string_type& args) {
   control->ui()->download_list()->set_current_view(args);
   return torrent::Object();
-}
-
-torrent::Object
-cmd_ui_current_view() {
-  return control->ui()->download_list()->current_view()->name();
 }
 
 torrent::Object
@@ -528,12 +546,12 @@ initialize_command_ui() {
   CMD2_ANY_L   ("view.list",          std::bind(&apply_view_list));
   CMD2_ANY_LIST("view.set",           std::bind(&apply_view_set, std::placeholders::_2));
 
-  CMD2_ANY_LIST("view.filter",        std::bind(&apply_view_event, &core::ViewManager::set_filter, std::placeholders::_2));
+  CMD2_ANY_LIST("view.filter",        std::bind(&apply_view_cfilter, &core::ViewManager::set_filter, std::placeholders::_2));
   CMD2_ANY_LIST("view.filter_on",     std::bind(&apply_view_filter_on, std::placeholders::_2));
 
   CMD2_ANY_LIST("view.sort",          std::bind(&apply_view_sort, std::placeholders::_2));
-  CMD2_ANY_LIST("view.sort_new",      std::bind(&apply_view_event, &core::ViewManager::set_sort_new, std::placeholders::_2));
-  CMD2_ANY_LIST("view.sort_current",  std::bind(&apply_view_event, &core::ViewManager::set_sort_current, std::placeholders::_2));
+  CMD2_ANY_LIST("view.sort_new",      std::bind(&apply_view_cfilter, &core::ViewManager::set_sort_new, std::placeholders::_2));
+  CMD2_ANY_LIST("view.sort_current",  std::bind(&apply_view_cfilter, &core::ViewManager::set_sort_current, std::placeholders::_2));
 
   CMD2_ANY_LIST("view.event_added",   std::bind(&apply_view_event, &core::ViewManager::set_event_added, std::placeholders::_2));
   CMD2_ANY_LIST("view.event_removed", std::bind(&apply_view_event, &core::ViewManager::set_event_removed, std::placeholders::_2));
@@ -552,7 +570,6 @@ initialize_command_ui() {
 
   // Commands that affect the default rtorrent UI.
   CMD2_DL        ("ui.unfocus_download",   std::bind(&cmd_ui_unfocus_download, std::placeholders::_1));
-  CMD2_ANY       ("ui.current_view",       std::bind(&cmd_ui_current_view));
   CMD2_ANY_STRING("ui.current_view.set",   std::bind(&cmd_ui_set_view, std::placeholders::_2));
 
   // Move.

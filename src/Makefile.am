@@ -13,15 +13,11 @@ libsub_root_a_SOURCES = \
 	command_dynamic.cc \
 	command_events.cc \
 	command_file.cc \
-	command_ip.cc \
 	command_helpers.cc \
 	command_helpers.h \
-	command_groups.cc \
 	command_local.cc \
-	command_logging.cc \
 	command_network.cc \
 	command_peer.cc \
-	command_throttle.cc \
 	command_tracker.cc \
 	command_scheduler.cc \
 	command_ui.cc \
@@ -35,6 +31,8 @@ libsub_root_a_SOURCES = \
 	signal_handler.h \
 	thread_base.cc \
 	thread_base.h \
+	thread_main.cc \
+	thread_main.h \
 	thread_worker.cc \
 	thread_worker.h
 
@@ -47,10 +45,9 @@ rtorrent_LDADD = \
 	display/libsub_display.a \
 	input/libsub_input.a \
 	rpc/libsub_rpc.a \
-	utils/libsub_utils.a \
-	@PTHREAD_LIBS@
+	utils/libsub_utils.a
 
 rtorrent_SOURCES = \
 	main.cc
 
-AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir)
+INCLUDES = -I$(srcdir) -I$(top_srcdir)

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@
 
 #include <list>
 #include <torrent/peer/peer.h>
+#include <sigc++/connection.h>
 
 #include "display/manager.h"
 #include "utils/list_focus.h"
@@ -98,10 +99,7 @@ private:
   inline ElementBase* create_menu();
   inline ElementBase* create_info();
 
-  void                receive_min_uploads(int t);
   void                receive_max_uploads(int t);
-  void                receive_min_downloads(int t);
-  void                receive_max_downloads(int t);
   void                receive_min_peers(int t);
   void                receive_max_peers(int t);
 

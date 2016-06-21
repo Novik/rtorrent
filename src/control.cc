@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,13 +39,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <torrent/connection_manager.h>
-#include <torrent/utils/directory_events.h>
 
 #include "core/manager.h"
 #include "core/download_store.h"
 #include "core/view_manager.h"
 #include "core/dht_manager.h"
-#include "core/http_queue.h"
 
 #include "display/canvas.h"
 #include "display/window.h"
@@ -68,7 +66,6 @@ Control::Control() :
 
   m_commandScheduler(new rpc::CommandScheduler()),
   m_objectStorage(new rpc::object_storage()),
-  m_directory_events(new torrent::directory_events()),
 
   m_tick(0),
   m_shutdownReceived(false),
@@ -78,9 +75,9 @@ Control::Control() :
   m_viewManager = new core::ViewManager();
   m_dhtManager  = new core::DhtManager();
 
-  m_inputStdin->slot_pressed(std::bind(&input::Manager::pressed, m_input, std::placeholders::_1));
+  m_inputStdin->slot_pressed(sigc::mem_fun(m_input, &input::Manager::pressed));
 
-  m_taskShutdown.slot() = std::bind(&Control::handle_shutdown, this);
+  m_taskShutdown.set_slot(rak::mem_fn(this, &Control::handle_shutdown));
 
   m_commandScheduler->set_slot_error_message(rak::mem_fn(m_core, &core::Manager::push_log_std));
 }
@@ -96,7 +93,6 @@ Control::~Control() {
   delete m_core;
   delete m_dhtManager;
 
-  delete m_directory_events;
   delete m_commandScheduler;
   delete m_objectStorage;
 }
@@ -118,7 +114,7 @@ Control::initialize() {
 
   m_ui->init(this);
 
-  m_inputStdin->insert(torrent::main_thread()->poll());
+  m_inputStdin->insert(main_thread->poll());
 }
 
 void
@@ -128,7 +124,7 @@ Control::cleanup() {
 
   priority_queue_erase(&taskScheduler, &m_taskShutdown);
 
-  m_inputStdin->remove(torrent::main_thread()->poll());
+  m_inputStdin->remove(main_thread->poll());
 
   m_core->download_store()->disable();
 
@@ -150,16 +146,7 @@ Control::cleanup_exception() {
 
 bool
 Control::is_shutdown_completed() {
-  if (!m_shutdownQuick || worker_thread->is_active())
-    return false;
-
-  // Tracker requests can be disowned, so wait for these to
-  // finish. The edge case of torrent http downloads may delay
-  // shutdown.
-  if (!core()->http_stack()->empty() || !core()->http_queue()->empty())
-    return false;
-
-  return torrent::is_inactive();
+  return m_shutdownQuick && !worker_thread->is_active() && torrent::is_inactive();
 }
 
 void
@@ -170,7 +157,6 @@ Control::handle_shutdown() {
       worker_thread->queue_item(&ThreadBase::stop_thread);
 
     torrent::connection_manager()->listen_close();
-    m_directory_events->close();
     m_core->shutdown(false);
 
     if (!m_taskShutdown.is_queued())

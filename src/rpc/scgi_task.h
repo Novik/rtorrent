@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ public:
   static const          int max_header_size     = 2000;
   static const          int max_content_size    = (2 << 20);
 
-  SCgiTask() { m_fileDesc = -1; m_trusted = true; }
+  SCgiTask() { m_fileDesc = -1; }
 
   bool                is_open() const      { return m_fileDesc != -1; }
   bool                is_available() const { return m_fileDesc == -1; }
@@ -77,7 +77,6 @@ private:
   char*               m_buffer;
   char*               m_position;
   char*               m_body;
-  bool                m_trusted;
 
   unsigned int        m_bufferSize;
 };

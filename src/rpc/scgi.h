@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -52,14 +52,13 @@ namespace rpc {
 class lt_cacheline_aligned SCgi : public torrent::Event {
 public:
   typedef rak::function2<bool, const char*, uint32_t>             slot_write;
+//   typedef rak::function3<bool, const char*, uint32_t, slot_write> slot_process;
 
-  static const int max_tasks = 100;
+  static const int max_tasks = 10;
 
   // Global lock:
   SCgi() : m_logFd(-1) {}
   virtual ~SCgi();
-
-  const char*         type_name() const { return "scgi"; }
 
   void                open_port(void* sa, unsigned int length, bool dontRoute);
   void                open_named(const std::string& filename);
@@ -69,6 +68,8 @@ public:
 
   const std::string&  path() const { return m_path; }
 
+//   void                set_slot_process(slot_process::base_type* s) { m_slotProcess.set(s); }
+
   int                 log_fd() const     { return m_logFd; }
   void                set_log_fd(int fd) { m_logFd = fd; }
 
@@ -77,7 +78,7 @@ public:
   virtual void        event_write();
   virtual void        event_error();
 
-  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length, bool trusted = true);
+  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length);
 
   utils::SocketFd&    get_fd()            { return *reinterpret_cast<utils::SocketFd*>(&m_fileDesc); }
 
@@ -86,6 +87,7 @@ private:
 
   std::string         m_path;
   int                 m_logFd;
+//   slot_process        m_slotProcess;
   SCgiTask            m_task[max_tasks];
 };
 

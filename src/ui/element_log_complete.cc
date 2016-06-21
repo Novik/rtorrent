@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,8 +37,6 @@
 #include "config.h"
 
 #include <torrent/exceptions.h>
-#include <torrent/torrent.h>
-#include <torrent/utils/thread_base.h>
 
 #include "display/frame.h"
 #include "display/manager.h"
@@ -50,13 +48,9 @@
 
 namespace ui {
 
-ElementLogComplete::ElementLogComplete(torrent::log_buffer* l) :
+ElementLogComplete::ElementLogComplete(core::Log* l) :
   m_window(NULL),
   m_log(l) {
-
-  unsigned int signal_index = torrent::main_thread()->signal_bitfield()->add_signal(std::bind(&ElementLogComplete::received_update, this));
-
-  m_log->lock_and_set_update_slot(std::bind(&torrent::thread_base::send_event_signal, torrent::main_thread(), signal_index, false));
 }
 
 void
@@ -90,12 +84,6 @@ ElementLogComplete::disable() {
 display::Window*
 ElementLogComplete::window() {
   return m_window;
-}
-
-void
-ElementLogComplete::received_update() {
-  if (m_window != NULL)
-    m_window->mark_dirty();
 }
 
 }

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,10 +36,11 @@
 
 #include "config.h"
 
-#include <list>
-#include <rak/file_stat.h>
-#include <rak/functional.h>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
+#include <sigc++/signal.h>
 #include <rak/path.h>
+#include <rak/functional.h>
 #include <torrent/exceptions.h>
 #include <torrent/rate.h>
 #include <torrent/torrent.h>
@@ -59,16 +60,23 @@ Download::Download(download_type d) :
   m_download(d),
   m_hashFailed(false),
 
-  m_resumeFlags(~uint32_t()),
-  m_group(0) {
+  m_chunksFailed(0),
+  m_resumeFlags(~uint32_t()) {
 
-  m_download.info()->signal_tracker_success().push_back(std::bind(&Download::receive_tracker_msg, this, ""));
-  m_download.info()->signal_tracker_failed().push_back(std::bind(&Download::receive_tracker_msg, this, std::placeholders::_1));
+  m_connTrackerSucceeded = m_download.info()->signal_tracker_success().connect(sigc::bind(sigc::mem_fun(*this, &Download::receive_tracker_msg), ""));
+  m_connTrackerFailed   = m_download.info()->signal_tracker_failed().connect(sigc::mem_fun(*this, &Download::receive_tracker_msg));
+  m_connStorageError    = m_download.info()->signal_storage_error().connect(sigc::mem_fun(*this, &Download::receive_storage_error));
+
+  m_download.info()->signal_chunk_failed().connect(sigc::mem_fun(*this, &Download::receive_chunk_failed));
 }
 
 Download::~Download() {
   if (!m_download.is_valid())
     return;
+
+  m_connTrackerSucceeded.disconnect();
+  m_connTrackerFailed.disconnect();
+  m_connStorageError.disconnect();
 
   m_download = download_type();
 }
@@ -115,6 +123,11 @@ Download::receive_tracker_msg(std::string msg) {
     m_message = "Tracker: [" + msg + "]";
 }
 
+void
+Download::receive_storage_error(std::string msg) {
+  m_message = "Storage error: [" + msg + "]";
+}
+
 float
 Download::distributed_copies() const {
   const uint8_t* avail = m_download.chunks_seen();
@@ -140,6 +153,11 @@ Download::distributed_copies() const {
 }
 
 void
+Download::receive_chunk_failed(__UNUSED uint32_t idx) {
+  m_chunksFailed++;
+}
+
+void
 Download::set_throttle_name(const std::string& throttleName) {
   if (m_download.info()->is_active())
     throw torrent::input_error("Cannot set throttle on active download.");
@@ -153,31 +171,10 @@ Download::set_throttle_name(const std::string& throttleName) {
 
 void
 Download::set_root_directory(const std::string& path) {
-  // If the download is open, hashed and has completed chunks make
-  // sure to verify that the download files are still present.
-  // 
-  // This should ensure that no one tries to set the destination
-  // directory 'after' moving files. In cases where the user wants to
-  // override this behavior the download must first be closed or
-  // 'd.directory_base.set' may be used.
-  rak::file_stat file_stat;
-  torrent::FileList* file_list = m_download.file_list();
-
-  if (is_hash_checked() && file_list->completed_chunks() != 0 &&
-
-      (file_list->is_multi_file() ?
-       !file_list->is_root_dir_created() :
-       !file_stat.update(file_list->front()->frozen_path()))) {
-
-    set_message("Cannot change the directory of an open download after the files have been moved.");
-    rpc::call_command("d.state.set", (int64_t)0, rpc::make_target(this));
-    control->core()->download_list()->close_directly(this);
-
-    throw torrent::input_error("Cannot change the directory of an open download atter the files have been moved.");
-  }
+  torrent::FileList* fileList = m_download.file_list();
 
   control->core()->download_list()->close_directly(this);
-  file_list->set_root_dir(rak::path_expand(path));
+  fileList->set_root_dir(rak::path_expand(path));
 
   bencode()->get_key("rtorrent").insert_key("directory", path);
 }

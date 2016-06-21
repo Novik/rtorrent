@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -82,7 +82,7 @@ CurlGet::start() {
 
     // Normally libcurl should handle the timeout. But sometimes that doesn't
     // work right so we do a fallback timeout that just aborts the transfer.
-    m_taskTimeout.slot() = std::bind(&CurlGet::receive_timeout, this);
+    m_taskTimeout.set_slot(rak::mem_fn(this, &CurlGet::receive_timeout));
     priority_queue_erase(&taskScheduler, &m_taskTimeout);
     priority_queue_insert(&taskScheduler, &m_taskTimeout, cachedTime + rak::timer::from_seconds(m_timeout + 5));
   }

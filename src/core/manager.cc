@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -47,6 +47,8 @@
 #include <rak/regex.h>
 #include <rak/path.h>
 #include <rak/string_manip.h>
+#include <sigc++/adaptors/bind.h>
+#include <sigc++/adaptors/hide.h>
 #include <torrent/utils/resume.h>
 #include <torrent/object.h>
 #include <torrent/connection_manager.h>
@@ -55,7 +57,6 @@
 #include <torrent/object_stream.h>
 #include <torrent/tracker_list.h>
 #include <torrent/throttle.h>
-#include <torrent/utils/log.h>
 
 #include "rpc/parse_commands.h"
 #include "utils/directory.h"
@@ -69,26 +70,98 @@
 #include "download_store.h"
 #include "http_queue.h"
 #include "manager.h"
-#include "poll_manager.h"
+#include "poll_manager_epoll.h"
+#include "poll_manager_kqueue.h"
+#include "poll_manager_select.h"
 #include "view.h"
 
 namespace core {
 
-const int Manager::create_start;
-const int Manager::create_tied;
-const int Manager::create_quiet;
-const int Manager::create_raw_data;
+void
+receive_tracker_dump(const std::string& url, const char* data, size_t size) {
+  const std::string& filename = rpc::call_command_string("log.tracker");
+
+  if (filename.empty())
+    return;
+
+  std::fstream fstr(filename.c_str(), std::ios::out | std::ios::app);
+
+  if (!fstr.is_open())
+    return;
+
+  fstr << "url: " << url << std::endl << "---" << std::endl;
+  fstr.write(data, size);
+  fstr << std::endl <<"---" << std::endl;
+}
+
+void
+Manager::handshake_log(const sockaddr* sa, int msg, int err, const torrent::HashString* hash) {
+  if (!rpc::call_command_value("log.handshake"))
+    return;
+  
+  std::string peer;
+  std::string download;
+
+  const rak::socket_address* socketAddress = rak::socket_address::cast_from(sa);
+
+  if (socketAddress->is_valid()) {
+    char port[6];
+    snprintf(port, sizeof(port), "%d", socketAddress->port());
+    peer = socketAddress->address_str() + ":" + port;
+  } else {
+    peer = "(unknown)";
+  }
+
+//   torrent::Download d = torrent::download_find(hash);
+
+//   if (d.is_valid())
+//     download = ": " + d.name();
+//   else
+    download = "";
+
+  switch (msg) {
+  case torrent::ConnectionManager::handshake_incoming:
+    m_logComplete.push_front("Incoming connection from " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_outgoing:
+    m_logComplete.push_front("Outgoing connection to " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_outgoing_encrypted:
+    m_logComplete.push_front("Outgoing encrypted connection to " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_outgoing_proxy:
+    m_logComplete.push_front("Outgoing proxy connection to " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_success:
+    m_logComplete.push_front("Successful handshake: " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_dropped:
+    m_logComplete.push_front("Dropped handshake: " + peer + " - " + torrent::strerror(err) + download);
+    break;
+  case torrent::ConnectionManager::handshake_failed:
+    m_logComplete.push_front("Handshake failed: " + peer + " - " + torrent::strerror(err) + download);
+    break;
+  case torrent::ConnectionManager::handshake_retry_plaintext:
+    m_logComplete.push_front("Trying again without encryption: " + peer + download);
+    break;
+  case torrent::ConnectionManager::handshake_retry_encrypted:
+    m_logComplete.push_front("Trying again encrypted: " + peer + download);
+    break;
+  default:
+    m_logComplete.push_front("Unknown handshake message for " + peer + download);
+    break;
+  }
+}
 
 void
 Manager::push_log(const char* msg) {
-  m_log_important->lock_and_push_log(msg, strlen(msg), 0);
-  m_log_complete->lock_and_push_log(msg, strlen(msg), 0);
+  m_logImportant.push_front(msg);
+  m_logComplete.push_front(msg);
 }
 
 Manager::Manager() :
-  m_hashingView(NULL),
-  m_log_important(torrent::log_open_log_buffer("important")),
-  m_log_complete(torrent::log_open_log_buffer("complete"))
+  m_hashingView(NULL)
+//   m_pollManager(NULL) {
 {
   m_downloadStore   = new DownloadStore();
   m_downloadList    = new DownloadList();
@@ -105,8 +178,6 @@ Manager::~Manager() {
   torrent::Throttle::destroy_throttle(m_throttles["NULL"].first);
   delete m_downloadList;
 
-  // TODO: Clean up logs objects.
-
   delete m_downloadStore;
   delete m_httpQueue;
   delete m_fileStatusCache;
@@ -118,7 +189,7 @@ Manager::set_hashing_view(View* v) {
     throw torrent::internal_error("Manager::set_hashing_view(...) received NULL or is already set.");
 
   m_hashingView = v;
-  m_hashingView->signal_changed().push_back(std::bind(&Manager::receive_hashing_changed, this));
+  v->signal_changed().connect(sigc::mem_fun(this, &Manager::receive_hashing_changed));
 }
 
 torrent::ThrottlePair
@@ -138,7 +209,7 @@ Manager::get_throttle(const std::string& name) {
 void
 Manager::set_address_throttle(uint32_t begin, uint32_t end, torrent::ThrottlePair throttles) {
   m_addressThrottles.set_merge(begin, end, throttles);
-  torrent::connection_manager()->address_throttle() = std::bind(&core::Manager::get_address_throttle, control->core(), std::placeholders::_1);
+  torrent::connection_manager()->set_address_throttle(sigc::mem_fun(control->core(), &core::Manager::get_address_throttle));
 }
 
 torrent::ThrottlePair
@@ -149,10 +220,12 @@ Manager::get_address_throttle(const sockaddr* addr) {
 // Most of this should be possible to move out.
 void
 Manager::initialize_second() {
-  torrent::Http::slot_factory() = std::bind(&CurlStack::new_object, m_httpStack);
-  m_httpQueue->set_slot_factory(std::bind(&CurlStack::new_object, m_httpStack));
+  torrent::Http::set_factory(sigc::mem_fun(m_httpStack, &CurlStack::new_object));
+  m_httpQueue->slot_factory(sigc::mem_fun(m_httpStack, &CurlStack::new_object));
 
   CurlStack::global_init();
+
+  torrent::connection_manager()->set_signal_handshake_log(sigc::mem_fun(this, &Manager::handshake_log));
 }
 
 void
@@ -188,7 +261,7 @@ Manager::listen_open() {
     return;
 
   int portFirst, portLast;
-  torrent::Object portRange = rpc::call_command("network.port_range");
+  torrent::Object portRange = rpc::call_command_void("network.port_range");
 
   if (portRange.is_string()) {
     if (std::sscanf(portRange.as_string().c_str(), "%i-%i", &portFirst, &portLast) != 2)
@@ -314,7 +387,8 @@ Manager::set_proxy_address(const std::string& addr) {
 
 void
 Manager::receive_http_failed(std::string msg) {
-  push_log_std("Http download error: \"" + msg + "\"");
+  m_logImportant.push_front("Http download error: \"" + msg + "\"");
+  m_logComplete.push_front("Http download error: \"" + msg + "\"");
 }
 
 void
@@ -335,7 +409,7 @@ Manager::try_create_download(const std::string& uri, int flags, const command_li
 
   f->set_start(flags & create_start);
   f->set_print_log(!(flags & create_quiet));
-  f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+  f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
 
   if (flags & create_raw_data)
     f->load_raw_data(uri);
@@ -359,7 +433,7 @@ Manager::try_create_download_from_meta_download(torrent::Object* bencode, const 
 
   f->set_start(meta.get_key_value("start"));
   f->set_print_log(meta.get_key_value("print_log"));
-  f->slot_finished(std::bind(&rak::call_delete_func<core::DownloadFactory>, f));
+  f->slot_finished(sigc::bind(sigc::ptr_fun(&rak::call_delete_func<core::DownloadFactory>), f));
 
   // Bit of a waste to create the bencode repesentation here
   // only to have the DownloadFactory decode it.
@@ -505,7 +579,7 @@ Manager::receive_hashing_changed() {
 
       } else {
         (*itr)->set_hash_failed(true);
-        lt_log_print(torrent::LOG_TORRENT_ERROR, "Hashing failed: %s", e.what());
+        push_log(e.what());
       }
     }
   }

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -52,6 +52,7 @@
 #include "rpc/parse_commands.h"
 
 ThreadWorker::ThreadWorker() {
+  m_taskTouchLog.set_slot(rak::mem_fn(this, &ThreadWorker::task_touch_log));
 }
 
 ThreadWorker::~ThreadWorker() {
@@ -61,7 +62,8 @@ ThreadWorker::~ThreadWorker() {
 
 void
 ThreadWorker::init_thread() {
-  m_poll = core::create_poll();
+  m_pollManager = core::PollManager::create_poll_manager();
+
   m_state = STATE_INITIALIZED;
 }
 
@@ -100,6 +102,14 @@ ThreadWorker::start_scgi(ThreadBase* baseThread) {
 }
 
 void
+ThreadWorker::start_log_counter(ThreadBase* baseThread) {
+  ThreadWorker* thread = (ThreadWorker*)baseThread;
+
+  if (!thread->m_taskTouchLog.is_queued())
+    priority_queue_insert(&thread->m_taskScheduler, &thread->m_taskTouchLog, cachedTime);
+}
+
+void
 ThreadWorker::msg_change_xmlrpc_log(ThreadBase* baseThread) {
   ThreadWorker* thread = (ThreadWorker*)baseThread;
 
@@ -129,4 +139,13 @@ ThreadWorker::change_xmlrpc_log() {
   }
 
   control->core()->push_log_std("Logging XMLRPC events to '" + m_xmlrpcLog + "'.");
+}
+
+void
+ThreadWorker::task_touch_log() {
+  priority_queue_insert(&m_taskScheduler, &m_taskTouchLog, cachedTime + rak::timer::from_seconds(1));
+
+  acquire_global_lock();
+  control->core()->push_log("Tick Tock.");
+  release_global_lock();
 }

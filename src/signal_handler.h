@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,15 +37,12 @@
 #ifndef RTORRENT_SIGNAL_HANDLER_H
 #define RTORRENT_SIGNAL_HANDLER_H
 
-#include <signal.h>
-#include lt_tr1_functional
+#include <sys/signal.h>
+#include <sigc++/functors/slot.h>
 
 class SignalHandler {
 public:
-  typedef std::function<void ()> slot_void;
-
-  // typedef void (*handler_slot)(int, siginfo_t *info, ucontext_t *uap);
-  typedef void (*handler_slot)(int, siginfo_t*, void*);
+  typedef sigc::slot0<void> Slot;
 
 #ifdef NSIG
   static const unsigned int HIGHEST_SIGNAL = NSIG;
@@ -56,16 +53,14 @@ public:
 
   static void         set_default(unsigned int signum);
   static void         set_ignore(unsigned int signum);
-  static void         set_handler(unsigned int signum, slot_void slot);
-
-  static void         set_sigaction_handler(unsigned int signum, handler_slot slot);
+  static void         set_handler(unsigned int signum, Slot slot);
 
   static const char*  as_string(unsigned int signum);
 
 private:
   static void         caught(int signum);
 
-  static slot_void    m_handlers[HIGHEST_SIGNAL];
+  static Slot         m_handlers[HIGHEST_SIGNAL];
 };
 
 #endif

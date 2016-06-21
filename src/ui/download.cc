@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
 
 #include "config.h"
 
+#include <sigc++/adaptors/bind.h>
 #include <rak/functional.h>
 #include <rak/string_manip.h>
 #include <torrent/exceptions.h>
@@ -84,13 +85,13 @@ Download::Download(core::Download* d) :
   m_uiArray[DISPLAY_CHUNKS_SEEN]   = new ElementChunksSeen(d);
   m_uiArray[DISPLAY_TRANSFER_LIST] = new ElementTransferList(d);
 
-  m_uiArray[DISPLAY_MENU]->slot_exit(std::bind(&slot_type::operator(), &m_slot_exit));
-  m_uiArray[DISPLAY_PEER_LIST]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_PEER_LIST));
-  m_uiArray[DISPLAY_INFO]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_INFO));
-  m_uiArray[DISPLAY_FILE_LIST]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_FILE_LIST));
-  m_uiArray[DISPLAY_TRACKER_LIST]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_TRACKER_LIST));
-  m_uiArray[DISPLAY_CHUNKS_SEEN]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_CHUNKS_SEEN));
-  m_uiArray[DISPLAY_TRANSFER_LIST]->slot_exit(std::bind(&Download::activate_display_menu, this, DISPLAY_TRANSFER_LIST));
+  m_uiArray[DISPLAY_MENU]->slot_exit(sigc::mem_fun(&m_slotExit, &slot_type::operator()));
+  m_uiArray[DISPLAY_PEER_LIST]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_PEER_LIST));
+  m_uiArray[DISPLAY_INFO]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_INFO));
+  m_uiArray[DISPLAY_FILE_LIST]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_FILE_LIST));
+  m_uiArray[DISPLAY_TRACKER_LIST]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_TRACKER_LIST));
+  m_uiArray[DISPLAY_CHUNKS_SEEN]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_CHUNKS_SEEN));
+  m_uiArray[DISPLAY_TRANSFER_LIST]->slot_exit(sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_TRANSFER_LIST));
 
   bind_keys();
 }
@@ -109,30 +110,30 @@ Download::create_menu() {
   ElementMenu* element = new ElementMenu;
 
   element->push_back("Peer list",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_PEER_LIST),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_PEER_LIST));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_PEER_LIST),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_PEER_LIST));
   element->push_back("Info",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_INFO),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_INFO));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_INFO),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_INFO));
   element->push_back("File list",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_FILE_LIST),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_FILE_LIST));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_FILE_LIST),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_FILE_LIST));
   element->push_back("Tracker list",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_TRACKER_LIST),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_TRACKER_LIST));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_TRACKER_LIST),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_TRACKER_LIST));
   element->push_back("Chunks seen",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_CHUNKS_SEEN),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_CHUNKS_SEEN));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_CHUNKS_SEEN),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_CHUNKS_SEEN));
   element->push_back("Transfer list",
-                     std::bind(&Download::activate_display_focus, this, DISPLAY_TRANSFER_LIST),
-                     std::bind(&Download::activate_display_menu, this, DISPLAY_TRANSFER_LIST));
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_focus), DISPLAY_TRANSFER_LIST),
+                     sigc::bind(sigc::mem_fun(this, &Download::activate_display_menu), DISPLAY_TRANSFER_LIST));
 
   element->set_entry(0, false);
 
-  m_bindings['p'] = std::bind(&ElementMenu::set_entry_trigger, element, 0);
-  m_bindings['o'] = std::bind(&ElementMenu::set_entry_trigger, element, 1);
-  m_bindings['i'] = std::bind(&ElementMenu::set_entry_trigger, element, 2);
-  m_bindings['u'] = std::bind(&ElementMenu::set_entry_trigger, element, 3);
+  m_bindings['p'] = sigc::bind(sigc::mem_fun(element, &ElementMenu::set_entry_trigger), 0);
+  m_bindings['o'] = sigc::bind(sigc::mem_fun(element, &ElementMenu::set_entry_trigger), 1);
+  m_bindings['i'] = sigc::bind(sigc::mem_fun(element, &ElementMenu::set_entry_trigger), 2);
+  m_bindings['u'] = sigc::bind(sigc::mem_fun(element, &ElementMenu::set_entry_trigger), 3);
 
   return element;
 }
@@ -160,7 +161,7 @@ Download::create_info() {
   element->push_column("File stats:",       te_command("cat=$if=$d.is_multi_file=\\,multi\\,single,\" \",$d.size_files=,\" files\""));
 
   element->push_back("");
-  element->push_column("Chunks:",           te_command("cat=(d.completed_chunks),\" / \",(d.size_chunks),\" * \",(d.chunk_size),\" (\",(d.wanted_chunks),\")\""));
+  element->push_column("Chunks:",           te_command("cat=$d.completed_chunks=,\" / \",$d.size_chunks=,\" * \",$d.chunk_size="));
   element->push_column("Priority:",         te_command("d.priority="));
   element->push_column("Peer exchange:",    te_command("cat=$if=$d.peer_exchange=\\,enabled\\,disabled,\\ ,"
                                                        "$if=$d.is_pex_active=\\,active\\,$d.is_private=\\,private\\,inactive,"
@@ -175,7 +176,7 @@ Download::create_info() {
   element->push_column("Safe diskspace:",   te_command("cat=$convert.mb=$pieces.sync.safe_free_diskspace=,\" MB\""));
 
   element->push_back("");
-  element->push_column("Connection type:",  te_command("cat=(d.connection_current),\" \",(if,(d.accepting_seeders),"",\"no_seeders\")"));
+  element->push_column("Connection type:",  te_command("d.connection_current="));
   element->push_column("Choke heuristic:",  te_command("cat=(d.up.choke_heuristics),\", \",(d.down.choke_heuristics),\", \",(d.group)"));
   element->push_column("Safe sync:",        te_command("if=$pieces.sync.always_safe=,yes,no"));
   element->push_column("Send buffer:",      te_command("cat=$convert.kb=$network.send_buffer.size=,\" KB\""));
@@ -303,27 +304,6 @@ Download::receive_max_uploads(int t) {
 }
 
 void
-Download::receive_min_uploads(int t) {
-  m_windowDownloadStatus->mark_dirty();
-
-  m_download->download()->set_uploads_min(std::max<int32_t>(m_download->download()->uploads_min() + t, 0));
-}
-
-void
-Download::receive_max_downloads(int t) {
-  m_windowDownloadStatus->mark_dirty();
-
-  m_download->download()->set_downloads_max(std::max<int32_t>(m_download->download()->downloads_max() + t, 0));
-}
-
-void
-Download::receive_min_downloads(int t) {
-  m_windowDownloadStatus->mark_dirty();
-
-  m_download->download()->set_downloads_min(std::max<int32_t>(m_download->download()->downloads_min() + t, 0));
-}
-
-void
 Download::receive_min_peers(int t) {
   m_windowDownloadStatus->mark_dirty();
 
@@ -375,40 +355,34 @@ Download::adjust_up_throttle(int throttle) {
 
 void
 Download::bind_keys() {
-  m_bindings['1'] = std::bind(&Download::receive_min_uploads, this, -1);
-  m_bindings['2'] = std::bind(&Download::receive_min_uploads, this, 1);
-  m_bindings['3'] = std::bind(&Download::receive_max_uploads, this, -1);
-  m_bindings['4'] = std::bind(&Download::receive_max_uploads, this, 1);
-  m_bindings['!'] = std::bind(&Download::receive_min_downloads, this, -1);
-  m_bindings['@'] = std::bind(&Download::receive_min_downloads, this, 1);
-  m_bindings['#'] = std::bind(&Download::receive_max_downloads, this, -1);
-  m_bindings['$'] = std::bind(&Download::receive_max_downloads, this, 1);
-  m_bindings['5'] = std::bind(&Download::receive_min_peers, this, -5);
-  m_bindings['6'] = std::bind(&Download::receive_min_peers, this, 5);
-  m_bindings['7'] = std::bind(&Download::receive_max_peers, this, -5);
-  m_bindings['8'] = std::bind(&Download::receive_max_peers, this, 5);
-  m_bindings['+'] = std::bind(&Download::receive_next_priority, this);
-  m_bindings['-'] = std::bind(&Download::receive_prev_priority, this);
+  m_bindings['1'] = sigc::bind(sigc::mem_fun(this, &Download::receive_max_uploads), -1);
+  m_bindings['2'] = sigc::bind(sigc::mem_fun(this, &Download::receive_max_uploads), 1);
+  m_bindings['3'] = sigc::bind(sigc::mem_fun(this, &Download::receive_min_peers), -5);
+  m_bindings['4'] = sigc::bind(sigc::mem_fun(this, &Download::receive_min_peers), 5);
+  m_bindings['5'] = sigc::bind(sigc::mem_fun(this, &Download::receive_max_peers), -5);
+  m_bindings['6'] = sigc::bind(sigc::mem_fun(this, &Download::receive_max_peers), 5);
+  m_bindings['+'] = sigc::mem_fun(this, &Download::receive_next_priority);
+  m_bindings['-'] = sigc::mem_fun(this, &Download::receive_prev_priority);
 
-  m_bindings['t'] = std::bind(&torrent::Download::manual_request, m_download->download(), false);
-  m_bindings['T'] = std::bind(&torrent::Download::manual_request, m_download->download(), true);
+  m_bindings['t'] = sigc::bind(sigc::mem_fun(m_download->tracker_list(), &torrent::TrackerList::manual_request), false);
+  m_bindings['T'] = sigc::bind(sigc::mem_fun(m_download->tracker_list(), &torrent::TrackerList::manual_request), true);
 
   const char* keys = control->ui()->get_throttle_keys();
 
-  m_bindings[keys[ 0]] = std::bind(&Download::adjust_up_throttle, this, 1);
-  m_bindings[keys[ 1]] = std::bind(&Download::adjust_up_throttle, this, -1);
-  m_bindings[keys[ 2]] = std::bind(&Download::adjust_down_throttle, this, 1);
-  m_bindings[keys[ 3]] = std::bind(&Download::adjust_down_throttle, this, -1);
+  m_bindings[keys[ 0]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), 1);
+  m_bindings[keys[ 1]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), -1);
+  m_bindings[keys[ 2]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), 1);
+  m_bindings[keys[ 3]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), -1);
 
-  m_bindings[keys[ 4]] = std::bind(&Download::adjust_up_throttle, this, 5);
-  m_bindings[keys[ 5]] = std::bind(&Download::adjust_up_throttle, this, -5);
-  m_bindings[keys[ 6]] = std::bind(&Download::adjust_down_throttle, this, 5);
-  m_bindings[keys[ 7]] = std::bind(&Download::adjust_down_throttle, this, -5);
+  m_bindings[keys[ 4]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), 5);
+  m_bindings[keys[ 5]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), -5);
+  m_bindings[keys[ 6]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), 5);
+  m_bindings[keys[ 7]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), -5);
 
-  m_bindings[keys[ 8]] = std::bind(&Download::adjust_up_throttle, this, 50);
-  m_bindings[keys[ 9]] = std::bind(&Download::adjust_up_throttle, this, -50);
-  m_bindings[keys[10]] = std::bind(&Download::adjust_down_throttle, this, 50);
-  m_bindings[keys[11]] = std::bind(&Download::adjust_down_throttle, this, -50);
+  m_bindings[keys[ 8]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), 50);
+  m_bindings[keys[ 9]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_up_throttle), -50);
+  m_bindings[keys[10]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), 50);
+  m_bindings[keys[11]]      = sigc::bind(sigc::mem_fun(this, &Download::adjust_down_throttle), -50);
 }
 
 }

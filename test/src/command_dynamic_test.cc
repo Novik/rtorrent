@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "command_dynamic_test.h"
+#import "command_dynamic_test.h"
 
 #include "rpc/parse_commands.h"
 #include "control.h"

@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -68,10 +68,6 @@ namespace rpc {
   class object_storage;
 }
 
-namespace torrent {
-  class directory_events;
-}
-
 class Control {
 public:
   Control();
@@ -94,6 +90,7 @@ public:
   core::ViewManager*  view_manager()                { return m_viewManager; }
   core::DhtManager*   dht_manager()                 { return m_dhtManager; }
 
+
   ui::Root*           ui()                          { return m_ui; }
   display::Manager*   display()                     { return m_display; }
   input::Manager*     input()                       { return m_input; }
@@ -101,8 +98,6 @@ public:
 
   rpc::CommandScheduler* command_scheduler()        { return m_commandScheduler; }
   rpc::object_storage*   object_storage()           { return m_objectStorage; }
-
-  torrent::directory_events* directory_events()     { return m_directory_events; }
 
   uint64_t            tick() const                  { return m_tick; }
   void                inc_tick()                    { m_tick++; }
@@ -123,9 +118,8 @@ private:
   input::Manager*     m_input;
   input::InputEvent*  m_inputStdin;
 
-  rpc::CommandScheduler*     m_commandScheduler;
-  rpc::object_storage*       m_objectStorage;
-  torrent::directory_events* m_directory_events;
+  rpc::CommandScheduler* m_commandScheduler;
+  rpc::object_storage*   m_objectStorage;
 
   uint64_t            m_tick;
 

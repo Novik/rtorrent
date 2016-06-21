@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,8 +37,7 @@
 #ifndef RTORRENT_INPUT_PATH_INPUT_H
 #define RTORRENT_INPUT_PATH_INPUT_H
 
-#include <list>
-#include lt_tr1_functional
+#include <sigc++/signal.h>
 
 #include "utils/directory.h"
 #include "text_input.h"
@@ -47,19 +46,15 @@ namespace input {
 
 class PathInput : public TextInput {
 public:
-  typedef utils::Directory::iterator              directory_itr;
-  typedef std::pair<directory_itr, directory_itr> range_type;
-
-  typedef std::function<void ()>                             slot_void;
-  typedef std::function<void (directory_itr, directory_itr)> slot_itr_itr;
-  typedef std::list<slot_void>                                    signal_void;
-  typedef std::list<slot_itr_itr>                                 signal_itr_itr;
+  typedef std::pair<utils::Directory::iterator, utils::Directory::iterator>           Range;
+  typedef sigc::signal0<void>                                                         Signal;
+  typedef sigc::signal2<void, utils::Directory::iterator, utils::Directory::iterator> SignalShowRange;
 
   PathInput();
   virtual ~PathInput() {}
 
-  signal_void&        signal_show_next()  { return m_signal_show_next; }
-  signal_itr_itr&     signal_show_range() { return m_signal_show_range; }
+  Signal&             signal_show_next()          { return m_signalShowNext; }
+  SignalShowRange&    signal_show_range()         { return m_signalShowRange; }
 
   virtual bool        pressed(int key);
 
@@ -67,12 +62,12 @@ private:
   void                receive_do_complete();
 
   size_type           find_last_delim();
-  range_type          find_incomplete(utils::Directory& d, const std::string& f);
+  Range               find_incomplete(utils::Directory& d, const std::string& f);
 
   bool                m_showNext;
 
-  signal_void         m_signal_show_next;
-  signal_itr_itr      m_signal_show_range;
+  Signal              m_signalShowNext;
+  SignalShowRange     m_signalShowRange;
 };
 
 }

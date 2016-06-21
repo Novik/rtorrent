@@ -1,53 +1,43 @@
-AC_INIT(rtorrent, 0.9.6, sundell.software@gmail.com)
-
-AC_DEFINE(API_VERSION, 9, api version)
+AC_INIT(rtorrent, 0.8.9, jaris@ifi.uio.no)
 
 AM_INIT_AUTOMAKE
-AC_CONFIG_HEADERS(config.h)
+AM_CONFIG_HEADER(config.h)
 AM_PATH_CPPUNIT(1.9.6)
 
 AC_PROG_CXX
 AC_PROG_LIBTOOL
 
-RAK_ENABLE_DEBUG
-RAK_ENABLE_EXTRA_DEBUG
-RAK_ENABLE_WERROR
-
-RAK_CHECK_CXX11
-RAK_CHECK_TR1_LIB
+TORRENT_CHECK_CXXFLAGS()
+TORRENT_ENABLE_DEBUG()
+TORRENT_ENABLE_EXTRA_DEBUG()
+TORRENT_ENABLE_WERROR()
 
 TORRENT_DISABLE_IPV6
 
 AC_SYS_LARGEFILE
 
-TORRENT_CHECK_EXECINFO
+TORRENT_CHECK_EXECINFO()
+TORRENT_OTFD()
 
 TORRENT_ENABLE_ARCH
 TORRENT_WITH_SYSROOT
 
-TORRENT_WITHOUT_VARIABLE_FDSET
-TORRENT_WITHOUT_STATVFS
-TORRENT_WITHOUT_STATFS
+TORRENT_WITHOUT_VARIABLE_FDSET()
+TORRENT_WITHOUT_NCURSESW()
+TORRENT_WITHOUT_STATVFS()
+TORRENT_WITHOUT_STATFS()
 
-AX_PTHREAD([], AC_MSG_ERROR([requires pthread]))
-AX_WITH_CURSES
+PKG_CHECK_MODULES(sigc, sigc++-2.0,
+	          CXXFLAGS="$CXXFLAGS $sigc_CFLAGS";
+		  LIBS="$LIBS $sigc_LIBS")
 
-if test "x$ax_cv_ncursesw" != xyes && test "x$ax_cv_ncurses" != xyes; then
-   AC_MSG_ERROR([requires either NcursesW or Ncurses library])
-fi
-
-CFLAGS="$CFLAGS $PTHREAD_CFLAGS $CURSES_CFLAGS"
-CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS $CURSES_CFLAGS"
-LIBS="$PTHREAD_LIBS $CURSES_LIB $LIBS"
-
-PKG_CHECK_MODULES([libcurl], libcurl >= 7.15.4,
+PKG_CHECK_MODULES(libcurl, libcurl >= 7.15.4,
 	          CXXFLAGS="$CXXFLAGS $libcurl_CFLAGS";
 		  LIBS="$LIBS $libcurl_LIBS")
 
-PKG_CHECK_MODULES([libtorrent], libtorrent >= 0.13.6,
+PKG_CHECK_MODULES(libtorrent, libtorrent >= 0.12.9,
 	          CXXFLAGS="$CXXFLAGS $libtorrent_CFLAGS";
-		  LIBS="$LIBS $libtorrent_LIBS",
-		  [AC_MSG_ERROR([libtorrent >= 0.13.6 not found. Install from https://github.com/rakshasa/libtorrent.git])])
+		  LIBS="$LIBS $libtorrent_LIBS")
 
 AC_LANG_PUSH(C++)
 TORRENT_WITH_XMLRPC_C
@@ -58,7 +48,6 @@ AC_DEFINE(USER_AGENT, [std::string(PACKAGE "/" VERSION "/") + torrent::version()
 
 AC_CHECK_FUNCS(posix_memalign)
 TORRENT_CHECK_CACHELINE()
-TORRENT_CHECK_POPCOUNT()
 
 CC_ATTRIBUTE_UNUSED(
 	AC_DEFINE([__UNUSED], [__attribute__((unused))], [Wrapper around unused attribute]),

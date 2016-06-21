@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@
 
 #include <list>
 #include <iosfwd>
-#include lt_tr1_functional
+#include <sigc++/signal.h>
 
 namespace core {
 
@@ -47,23 +47,22 @@ class CurlGet;
 
 class HttpQueue : private std::list<CurlGet*> {
 public:
-  typedef std::list<CurlGet*>                 base_type;
-  typedef std::function<CurlGet* ()>     slot_factory;
-  typedef std::function<void (CurlGet*)> slot_curl_get;
-  typedef std::list<slot_curl_get>            signal_curl_get;
+  typedef std::list<CurlGet*>           Base;
+  typedef sigc::signal1<void, CurlGet*> SignalHttp;
+  typedef sigc::slot0<CurlGet*>         SlotFactory;
 
-  using base_type::iterator;
-  using base_type::const_iterator;
-  using base_type::reverse_iterator;
-  using base_type::const_reverse_iterator;
+  using Base::iterator;
+  using Base::const_iterator;
+  using Base::reverse_iterator;
+  using Base::const_reverse_iterator;
 
-  using base_type::begin;
-  using base_type::end;
-  using base_type::rbegin;
-  using base_type::rend;
+  using Base::begin;
+  using Base::end;
+  using Base::rbegin;
+  using Base::rend;
 
-  using base_type::empty;
-  using base_type::size;
+  using Base::empty;
+  using Base::size;
 
   HttpQueue() {}
   ~HttpQueue() { clear(); }
@@ -78,15 +77,15 @@ public:
 
   void        clear();
 
-  void             set_slot_factory(slot_factory s) { m_slot_factory = s; }
+  void        slot_factory(SlotFactory s) { m_slotFactory = s; }
 
-  signal_curl_get& signal_insert() { return m_signal_insert; }
-  signal_curl_get& signal_erase()  { return m_signal_erase; }
+  SignalHttp& signal_insert()             { return m_signalInsert; }
+  SignalHttp& signal_erase()              { return m_signalErase; }
 
 private:
-  slot_factory    m_slot_factory;
-  signal_curl_get m_signal_insert;
-  signal_curl_get m_signal_erase;
+  SlotFactory m_slotFactory;
+  SignalHttp  m_signalInsert;
+  SignalHttp  m_signalErase;
 };
 
 }

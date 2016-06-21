@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,8 +37,6 @@
 #ifndef RTORRENT_UI_ELEMENT_PEER_LIST_H
 #define RTORRENT_UI_ELEMENT_PEER_LIST_H
 
-#include <torrent/peer/connection_list.h>
-
 #include "core/download.h"
 
 #include "element_base.h"
@@ -50,8 +48,6 @@ class ElementText;
 class ElementPeerList : public ElementBase {
 public:
   typedef std::list<torrent::Peer*> PList;
-
-  typedef torrent::ConnectionList::signal_peer_type::iterator signal_connection;
 
   typedef enum {
     DISPLAY_LIST,
@@ -93,8 +89,8 @@ private:
   PList               m_list;
   PList::iterator     m_listItr;
 
-  signal_connection   m_peer_connected;
-  signal_connection   m_peer_disconnected;
+  sigc::connection    m_connPeerConnected;
+  sigc::connection    m_connPeerDisconnected;
 };
 
 }

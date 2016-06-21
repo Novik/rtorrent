@@ -4,7 +4,7 @@
 #include <torrent/object.h>
 #include "rpc/command_map.h"
 
-#include "command_slot_test.h"
+#import "command_slot_test.h"
 
 CPPUNIT_TEST_SUITE_REGISTRATION(CommandSlotTest);
 

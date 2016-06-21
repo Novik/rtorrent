@@ -49,15 +49,10 @@ class timer {
   timer(int64_t usec = 0) : m_time(usec) {}
   timer(timeval tv) : m_time((int64_t)(uint32_t)tv.tv_sec * 1000000 + (int64_t)(uint32_t)tv.tv_usec % 1000000) {}
 
-  bool                is_zero() const                    { return m_time == 0; }
-  bool                is_not_zero() const                { return m_time != 0; }
-
   int32_t             seconds() const                    { return m_time / 1000000; }
-  int32_t             seconds_ceiling() const            { return (m_time + 1000000 - 1) / 1000000; }
   int64_t             usec() const                       { return m_time; }
 
   timer               round_seconds() const              { return (m_time / 1000000) * 1000000; }
-  timer               round_seconds_ceiling() const      { return ((m_time + 1000000 - 1) / 1000000) * 1000000; }
 
   timeval             tval() const {
     timeval val;

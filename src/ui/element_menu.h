@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,6 +37,8 @@
 #ifndef RTORRENT_UI_ELEMENT_MENU_H
 #define RTORRENT_UI_ELEMENT_MENU_H
 
+#include <sigc++/functors/slot.h>
+
 #include "core/download.h"
 
 #include "element_base.h"
@@ -51,13 +53,14 @@ namespace ui {
 struct ElementMenuEntry {
   display::TextElementStringBase* m_element;
 
-  std::function<void ()>     m_slotFocus;
-  std::function<void ()>     m_slotSelect;
+  sigc::slot0<void>   m_slotFocus;
+  sigc::slot0<void>   m_slotSelect;
 };
 
 class ElementMenu : public ElementBase, public std::vector<ElementMenuEntry> {
 public:
   typedef std::vector<ElementMenuEntry> base_type;
+  typedef sigc::slot0<void>             slot_type;
 
   typedef display::WindowText         WindowText;
 

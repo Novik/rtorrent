@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@
 
 #include <deque>
 #include <string>
+#include <sigc++/functors/slot.h>
 
 #include "rak/priority_queue_default.h"
 
@@ -89,24 +90,22 @@ class CurlStack : std::deque<CurlGet*> {
   void                set_max_active(unsigned int a)         { m_maxActive = a; }
 
   const std::string&  user_agent() const                     { return m_userAgent; }
-  const std::string&  http_proxy() const                     { return m_httpProxy; }
-  const std::string&  bind_address() const                   { return m_bindAddress; }
-  const std::string&  http_capath() const                    { return m_httpCaPath; }
-  const std::string&  http_cacert() const                    { return m_httpCaCert; }
-
   void                set_user_agent(const std::string& s)   { m_userAgent = s; }
+
+  const std::string&  http_proxy() const                     { return m_httpProxy; }
   void                set_http_proxy(const std::string& s)   { m_httpProxy = s; }
+
+  const std::string&  bind_address() const                   { return m_bindAddress; }
   void                set_bind_address(const std::string& s) { m_bindAddress = s; }
+  
+  const std::string&  http_capath() const                    { return m_httpCaPath; }
   void                set_http_capath(const std::string& s)  { m_httpCaPath = s; }
+
+  const std::string&  http_cacert() const                    { return m_httpCaCert; }
   void                set_http_cacert(const std::string& s)  { m_httpCaCert = s; }
 
-  bool                ssl_verify_host() const                { return m_ssl_verify_host; }
   bool                ssl_verify_peer() const                { return m_ssl_verify_peer; }
-  void                set_ssl_verify_host(bool s)            { m_ssl_verify_host = s; }
   void                set_ssl_verify_peer(bool s)            { m_ssl_verify_peer = s; }
-
-  long                dns_timeout() const                    { return m_dns_timeout; }
-  void                set_dns_timeout(long timeout)          { m_dns_timeout = timeout; }
 
   static void         global_init();
   static void         global_cleanup();
@@ -127,8 +126,6 @@ class CurlStack : std::deque<CurlGet*> {
 
   void                receive_timeout();
 
-  bool                process_done_handle();
-
   void*               m_handle;
 
   unsigned int        m_active;
@@ -141,10 +138,7 @@ class CurlStack : std::deque<CurlGet*> {
   std::string         m_bindAddress;
   std::string         m_httpCaPath;
   std::string         m_httpCaCert;
-
-  long                m_ssl_verify_host;
   bool                m_ssl_verify_peer;
-  long                m_dns_timeout;
 };
 
 }

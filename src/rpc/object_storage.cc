@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -44,23 +44,6 @@
 
 namespace rpc {
 
-const unsigned int object_storage::flag_generic_type;
-const unsigned int object_storage::flag_bool_type;
-const unsigned int object_storage::flag_value_type;
-const unsigned int object_storage::flag_string_type;
-const unsigned int object_storage::flag_list_type;
-const unsigned int object_storage::flag_function_type;
-const unsigned int object_storage::flag_multi_type;
-
-const unsigned int object_storage::mask_type;
-
-const unsigned int object_storage::flag_constant;
-const unsigned int object_storage::flag_static;
-const unsigned int object_storage::flag_private;
-const unsigned int object_storage::flag_rlookup;
-
-const size_t object_storage::key_size;
-
 object_storage::local_iterator
 object_storage::find_local(const torrent::raw_string& key) {
   std::size_t n = hash_fixed_key_type::hash(key.data(), key.size()) % bucket_count();
@@ -70,33 +53,6 @@ object_storage::find_local(const torrent::raw_string& key) {
       return itr;
 
   return end(bucket_count());
-}
-
-object_storage::local_iterator
-object_storage::find_local_const(const torrent::raw_string& key, unsigned int type) {
-  local_iterator itr = find_local(key);
-
-  if (itr == end(bucket_count()))
-    throw torrent::input_error("Key not found.");
-
-  if ((type != 0 && (itr->second.flags & mask_type) != type))
-    throw torrent::input_error("Object is wrong type or const.");
-
-  return itr;
-}
-
-object_storage::local_iterator
-object_storage::find_local_mutable(const torrent::raw_string& key, unsigned int type) {
-  local_iterator itr = find_local(key);
-
-  if (itr == end(bucket_count()))
-    throw torrent::input_error("Key not found.");
-
-  if ((type != 0 && (itr->second.flags & mask_type) != type) ||
-      itr->second.flags & flag_constant)
-    throw torrent::input_error("Object is wrong type or const.");
-
-  return itr;
 }
 
 object_storage::iterator
@@ -136,70 +92,80 @@ object_storage::insert(const char* key_data, uint32_t key_size, const torrent::O
   return result.first;
 }
 
-bool
-object_storage::has_flag(const torrent::raw_string& key, unsigned int flag) {
-  local_iterator itr = find_local_const(key);
-  return itr->second.flags & flag;
-}
-
-void
-object_storage::enable_flag(const torrent::raw_string& key, unsigned int flag) {
-  local_iterator itr = find_local_mutable(key);
-  itr->second.flags |= (flag & (flag_constant));
-}
-
 const torrent::Object&
 object_storage::get(const torrent::raw_string& key) {
-  local_iterator itr = find_local_const(key);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()))
+    throw torrent::input_error("Key not found.");
+
   return itr->second.object;
 }
 
 const torrent::Object&
 object_storage::set_bool(const torrent::raw_string& key, int64_t object) {
-  local_iterator itr = find_local_mutable(key, flag_bool_type);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()) || (itr->second.flags & mask_type) != flag_bool_type)
+    throw torrent::input_error("Key not found or wrong type.");
+
   return itr->second.object = !!object;
 }
 
 
 const torrent::Object&
 object_storage::set_value(const torrent::raw_string& key, int64_t object) {
-  local_iterator itr = find_local_mutable(key, flag_value_type);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()) || (itr->second.flags & mask_type) != flag_value_type)
+    throw torrent::input_error("Key not found or wrong type.");
+
   return itr->second.object = object;
 }
 
 
 const torrent::Object&
 object_storage::set_string(const torrent::raw_string& key, const std::string& object) {
-  local_iterator itr = find_local_mutable(key, flag_string_type);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()) || (itr->second.flags & mask_type) != flag_string_type)
+    throw torrent::input_error("Key not found or wrong type.");
+
   return itr->second.object = object;
 }
 
 const torrent::Object&
 object_storage::set_list(const torrent::raw_string& key, const torrent::Object::list_type& object) {
-  local_iterator itr = find_local_mutable(key, flag_list_type);
-  return itr->second.object = torrent::Object::create_list_range(object.begin(), object.end());
-}
+  local_iterator itr = find_local(key);
 
-void
-object_storage::list_push_back(const torrent::raw_string& key, const torrent::Object& object) {
-  local_iterator itr = find_local_mutable(key, flag_list_type);
-  itr->second.object.as_list().push_back(object);
+  if (itr == end(bucket_count()) || (itr->second.flags & mask_type) != flag_list_type)
+    throw torrent::input_error("Key not found or wrong type.");
+
+  return itr->second.object = torrent::Object::create_list_range(object.begin(), object.end());
 }
 
 const torrent::Object&
 object_storage::set_function(const torrent::raw_string& key, const std::string& object) {
-  local_iterator itr = find_local_mutable(key, flag_function_type);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()) || (itr->second.flags & mask_type) != flag_function_type)
+    throw torrent::input_error("Key not found or wrong type.");
+
   return itr->second.object = object;
 }
 
 torrent::Object
 object_storage::call_function(const torrent::raw_string& key, target_type target, const torrent::Object& object) {
-  local_iterator itr = find_local_const(key);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(bucket_count()))
+    throw torrent::input_error("Key not found or wrong type.");
 
   switch (itr->second.flags & mask_type) {
   case flag_function_type:
-  case flag_multi_type:
     return command_function_call_object(itr->second.object, target, object);
+  case flag_multi_type:
+    return command_function_multi_call(itr->second.object.as_map(), target, object);
   default:
     throw torrent::input_error("Key not found or wrong type.");
   }
@@ -207,13 +173,18 @@ object_storage::call_function(const torrent::raw_string& key, target_type target
 
 bool
 object_storage::has_multi_key(const torrent::raw_string& key, const std::string& cmd_key) {
-  local_iterator itr = find_local_const(key, flag_multi_type);
-  return itr->second.object.has_key(cmd_key);
+  local_iterator itr = find_local(key);
+
+  return itr != end(0) && (itr->second.flags & mask_type) == flag_multi_type &&
+    itr->second.object.has_key(cmd_key);
 }
 
 void
 object_storage::erase_multi_key(const torrent::raw_string& key, const std::string& cmd_key) {
-  local_iterator itr = find_local_mutable(key, flag_multi_type);
+  local_iterator itr = find_local(key);
+
+  if (itr != end(0) && (itr->second.flags & mask_type) == flag_multi_type)
+    return;
 
   itr->second.object.erase_key(cmd_key);
 
@@ -235,10 +206,13 @@ object_storage::erase_multi_key(const torrent::raw_string& key, const std::strin
 
 void
 object_storage::set_multi_key_obj(const torrent::raw_string& key, const std::string& cmd_key, const torrent::Object& object) {
-  if (!object.is_string() && !object.is_dict_key() && !object.is_list())
+  if (!object.is_string() && !object.is_dict_key())
     throw torrent::input_error("Object is wrong type.");
 
-  local_iterator itr = find_local_mutable(key, flag_multi_type);
+  local_iterator itr = find_local(key);
+
+  if (itr == end(0) || (itr->second.flags & mask_type) != flag_multi_type)
+    throw torrent::input_error("Key not found or wrong type.");
 
   if (itr->second.flags & flag_rlookup) {
     rlookup_iterator r_itr = m_rlookup.find(cmd_key);

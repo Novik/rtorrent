@@ -1,5 +1,5 @@
 // rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -122,7 +122,7 @@ TextElementCommand::print(char* first, char* last, Canvas::attributes_list* attr
   }
   case torrent::Object::TYPE_VALUE:
   { 
-    first += std::min<ptrdiff_t>(std::max(snprintf(first, last - first + 1, "%lld", (long long int)result.as_value()), 0), last - first + 1);
+    first += std::min<ptrdiff_t>(std::max(snprintf(first, last - first + 1, "%lld", result.as_value()), 0), last - first + 1);
     break;
   }
   default:
