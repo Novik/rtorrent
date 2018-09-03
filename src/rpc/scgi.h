@@ -77,7 +77,7 @@ public:
   virtual void        event_write();
   virtual void        event_error();
 
-  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length);
+  bool                receive_call(SCgiTask* task, const char* buffer, uint32_t length, bool trusted = true);
 
   utils::SocketFd&    get_fd()            { return *reinterpret_cast<utils::SocketFd*>(&m_fileDesc); }
 
