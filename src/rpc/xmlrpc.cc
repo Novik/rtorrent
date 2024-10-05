@@ -49,6 +49,8 @@
 #include "xmlrpc.h"
 #include "parse_commands.h"
 
+#include <unordered_set>
+
 namespace rpc {
 
 #ifdef HAVE_XMLRPC_C
@@ -526,7 +528,7 @@ XmlRpc::cleanup() {
   delete (xmlrpc_env*)m_env;
 }
 
-static std::vector<std::string> untrusted_commands =
+static std::unordered_set<std::string> untrusted_commands =
 {
 	"execute",
 	"execute.capture",
@@ -593,8 +595,7 @@ bool XmlRpc::set_trusted_connection( bool enabled )
 
 bool XmlRpc::is_command_enabled( const char* const methodName )
 {
-	return( trustedXmlConnection ||
-		(std::find(untrusted_commands.begin(), untrusted_commands.end(), methodName) == untrusted_commands.end()) );
+	return( trustedXmlConnection || untrusted_commands.count(methodName) == 0 );
 }
 
 void xmlrpc_check_command(xmlrpc_env* const envP,
